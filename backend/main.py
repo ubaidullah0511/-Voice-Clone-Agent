@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, r"D:\projects")  # parent of the `qwen` package
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, parent of the vendored `qwen` package
 
 import numpy as np
 import torch
@@ -52,7 +52,7 @@ GEN_DIR.mkdir(parents=True, exist_ok=True)
 
 # Per-chunk char budget so a single chunk's prefill + decode stay within
 # max_seq_len=1024 (tuned for this machine's 4GB GPU -- see
-# ../../qwen/HOW_TO_RUN.md). Empirically tested: 800 chars / 700 max_new_tokens
+# ../qwen/HOW_TO_RUN.md). Empirically tested: 800 chars / 700 max_new_tokens
 # with a short (~3.5s) reference clip takes ~85s and comfortably fits. Longer
 # reference clips (10+s) eat into the same max_seq_len budget and will be much
 # slower or may exceed it -- the talker's own StaticCache bounds check is the

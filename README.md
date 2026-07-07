@@ -8,6 +8,8 @@ this local MVP.
 
 ```
 webapp/
+  qwen/       Vendored FasterQwen3TTS package (CUDA-graph-accelerated Qwen3-TTS wrapper) --
+              see qwen/README.md and qwen/HOW_TO_RUN.md
   backend/
     main.py             FastAPI app: loads FasterQwen3TTS once, serves the REST API, runs
                         generation jobs in a background thread
@@ -19,7 +21,7 @@ webapp/
 
 ## Prerequisites
 
-Follow `../qwen/HOW_TO_RUN.md` first — CUDA-enabled torch, `qwen-tts`, `soundfile`, and a downloaded
+Follow `qwen/HOW_TO_RUN.md` first — CUDA-enabled torch, `qwen-tts`, `soundfile`, and a downloaded
 model snapshot. This app reuses those exact same settings (`dtype=bfloat16`, `attn_implementation="sdpa"`,
 `max_seq_len=1024`), tuned for a 4GB GPU.
 
