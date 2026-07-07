@@ -6,3 +6,5 @@ transformers
 qwen-tts
 soundfile
 numpy
+faster-whisper
+av

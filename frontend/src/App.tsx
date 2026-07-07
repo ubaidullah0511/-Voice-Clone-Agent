@@ -1,51 +1,75 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import ReferenceUpload from './components/ReferenceUpload'
-import PresetList from './components/PresetList'
+import VoiceGallery from './components/VoiceGallery'
+import AudioWaveform from './components/AudioWaveform'
+import LandingPage from './components/LandingPage'
 import StyleSelector from './components/StyleSelector'
 import StabilitySelector from './components/StabilitySelector'
-import ScriptInput, { MAX_SCRIPT_CHARS } from './components/ScriptInput'
-import AudioResult from './components/AudioResult'
+import ScriptBlock from './components/ScriptBlock'
 import HistoryList from './components/HistoryList'
+import QueuePanel from './components/QueuePanel'
 import { WandIcon } from './components/Icons'
+import { MAX_SCRIPT_CHARS } from './constants'
 import {
   ApiError,
   createPreset,
   deleteHistoryEntry,
   deletePreset,
   getHealth,
-  getJobStatus,
   getLanguages,
   listHistory,
   listPresets,
   startGenerate,
   type HistoryEntry,
-  type JobStatus,
   type Preset,
 } from './api'
 
+type Tab = 'studio' | 'queue'
+
+interface ScriptBlockState {
+  id: string
+  text: string
+  presetId: string | null
+}
+
+// crypto.randomUUID() only exists in secure contexts (HTTPS or localhost) --
+// this app is also accessed over plain HTTP via a LAN IP, where it's
+// undefined and throws. These ids are just local React keys, not security-
+// sensitive, so a simple counter is enough and works everywhere.
+let blockIdCounter = 0
+function generateBlockId(): string {
+  blockIdCounter += 1
+  return `block-${Date.now().toString(36)}-${blockIdCounter}`
+}
+
+function newBlock(overrides: Partial<ScriptBlockState> = {}): ScriptBlockState {
+  return { id: generateBlockId(), text: '', presetId: null, ...overrides }
+}
+
 export default function App() {
+  const [showLanding, setShowLanding] = useState(true)
+  const [activeTab, setActiveTab] = useState<Tab>('studio')
+
   const [modelStatus, setModelStatus] = useState<'checking' | 'ready' | 'down'>('checking')
   const [languages, setLanguages] = useState<string[]>([])
 
   const [presets, setPresets] = useState<Preset[]>([])
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
 
   const [newPresetName, setNewPresetName] = useState('')
   const [refFile, setRefFile] = useState<File | null>(null)
   const [refText, setRefText] = useState('')
+  const [presetTag, setPresetTag] = useState('')
   const [creatingPreset, setCreatingPreset] = useState(false)
 
   const [history, setHistory] = useState<HistoryEntry[]>([])
 
-  const [text, setText] = useState('')
+  const [scriptBlocks, setScriptBlocks] = useState<ScriptBlockState[]>([newBlock()])
   const [language, setLanguage] = useState('English')
   const [style, setStyle] = useState('natural')
   const [stability, setStability] = useState('balanced')
 
-  const [generating, setGenerating] = useState(false)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [submittingAll, setSubmittingAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function refreshPresets() {
@@ -96,12 +120,12 @@ export default function App() {
     setCreatingPreset(true)
     setError(null)
     try {
-      const preset = await createPreset(newPresetName, refFile, refText, language)
+      const preset = await createPreset(newPresetName, refFile, refText, language, presetTag)
       setPresets((prev) => [preset, ...prev])
-      setSelectedPresetId(preset.id)
       setNewPresetName('')
       setRefFile(null)
       setRefText('')
+      setPresetTag('')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to save preset')
     } finally {
@@ -113,7 +137,6 @@ export default function App() {
     try {
       await deletePreset(id)
       setPresets((prev) => prev.filter((p) => p.id !== id))
-      if (selectedPresetId === id) setSelectedPresetId(null)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to delete preset')
     }
@@ -128,69 +151,92 @@ export default function App() {
     }
   }
 
-  function pollJob(jobId: string): Promise<JobStatus> {
-    return new Promise((resolve, reject) => {
-      const tick = () => {
-        getJobStatus(jobId)
-          .then((job) => {
-            setProgress({ done: job.chunks_done, total: job.total_chunks })
-            if (job.status === 'done') {
-              resolve(job)
-            } else if (job.status === 'error') {
-              reject(new ApiError(job.error ?? 'Generation failed'))
-            } else {
-              setTimeout(tick, 1000)
-            }
-          })
-          .catch(reject)
-      }
-      tick()
+  function handleRequeue(entry: HistoryEntry) {
+    setScriptBlocks([newBlock({ text: entry.text, presetId: entry.preset_id })])
+    setLanguage(entry.language)
+    setStyle(entry.style)
+    setStability(entry.stability)
+    setActiveTab('studio')
+  }
+
+  function addScriptBlock() {
+    setScriptBlocks((prev) => [...prev, newBlock()])
+  }
+
+  function removeScriptBlock(id: string) {
+    setScriptBlocks((prev) => (prev.length > 1 ? prev.filter((b) => b.id !== id) : prev))
+  }
+
+  function updateBlock(id: string, patch: Partial<ScriptBlockState>) {
+    setScriptBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)))
+  }
+
+  function moveBlock(id: string, direction: -1 | 1) {
+    setScriptBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id)
+      const swapWith = idx + direction
+      if (idx < 0 || swapWith < 0 || swapWith >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[swapWith]] = [next[swapWith], next[idx]]
+      return next
     })
   }
 
-  async function handleGenerate() {
-    if (!selectedPresetId) return
-    setGenerating(true)
+  function assignPresetFromGallery(presetId: string) {
+    setScriptBlocks((prev) => {
+      const targetIdx = prev.findIndex((b) => !b.presetId)
+      const idx = targetIdx >= 0 ? targetIdx : prev.length - 1
+      return prev.map((b, i) => (i === idx ? { ...b, presetId } : b))
+    })
+  }
+
+  const validBlocks = scriptBlocks.filter(
+    (b) => b.text.trim().length > 0 && b.presetId && b.text.length <= MAX_SCRIPT_CHARS,
+  )
+
+  async function handleGenerateAll() {
+    if (validBlocks.length === 0) {
+      setError('Add at least one script with text and a selected voice.')
+      return
+    }
+    setSubmittingAll(true)
     setError(null)
-    setAudioUrl(null)
-    setProgress(null)
     try {
-      const { job_id, total_chunks } = await startGenerate({
-        presetId: selectedPresetId,
-        text,
-        language,
-        style,
-        stability,
-      })
-      setProgress({ done: 0, total: total_chunks })
-      const job = await pollJob(job_id)
-      setAudioUrl(job.audio_url)
-      refreshHistory()
+      for (const block of validBlocks) {
+        await startGenerate({
+          presetId: block.presetId as string,
+          text: block.text,
+          language,
+          style,
+          stability,
+        })
+      }
+      setScriptBlocks([newBlock()])
+      setActiveTab('queue')
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Generation failed')
+      setError(e instanceof ApiError ? e.message : 'Failed to submit batch')
     } finally {
-      setGenerating(false)
+      setSubmittingAll(false)
     }
   }
 
-  const canGenerate =
-    modelStatus === 'ready' &&
-    !!selectedPresetId &&
-    text.trim().length > 0 &&
-    text.length <= MAX_SCRIPT_CHARS &&
-    !generating
+  const canGenerateAll = modelStatus === 'ready' && validBlocks.length > 0 && !submittingAll
+
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />
+  }
 
   return (
     <div className="app">
       <header>
-        <div className="brand">
+        <button type="button" className="brand" onClick={() => setShowLanding(true)}>
           <span className="logo-mark">
             <span />
             <span />
             <span />
           </span>
           <h1>Voice Clone Studio</h1>
-        </div>
+        </button>
         <span className={`badge badge-${modelStatus}`}>
           <span className="badge-dot" />
           {modelStatus === 'ready'
@@ -201,62 +247,117 @@ export default function App() {
         </span>
       </header>
 
-      <PresetList
-        presets={presets}
-        selectedPresetId={selectedPresetId}
-        onSelect={setSelectedPresetId}
-        onDelete={handleDeletePreset}
-      />
+      <div className="tab-bar">
+        <button
+          type="button"
+          className={activeTab === 'studio' ? 'tab tab-active' : 'tab'}
+          onClick={() => setActiveTab('studio')}
+        >
+          Studio
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'queue' ? 'tab tab-active' : 'tab'}
+          onClick={() => setActiveTab('queue')}
+        >
+          Queue & History
+        </button>
+      </div>
 
-      <ReferenceUpload
-        name={newPresetName}
-        onNameChange={setNewPresetName}
-        refText={refText}
-        onRefTextChange={setRefText}
-        fileName={refFile?.name ?? null}
-        onFileSelected={setRefFile}
-        creating={creatingPreset}
-        onCreate={handleCreatePreset}
-      />
+      {activeTab === 'studio' ? (
+        <>
+          <AudioWaveform />
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Style</h2>
-        </div>
-        <StyleSelector value={style} onChange={setStyle} />
-        <div className="panel-header panel-header-spaced">
-          <h2>Stability</h2>
-        </div>
-        <StabilitySelector value={stability} onChange={setStability} />
-      </section>
+          <VoiceGallery
+            presets={presets}
+            selectedPresetId={null}
+            onSelect={assignPresetFromGallery}
+            onDelete={handleDeletePreset}
+          />
 
-      <ScriptInput
-        text={text}
-        onTextChange={setText}
-        language={language}
-        onLanguageChange={setLanguage}
-        languages={languages.length ? languages : [language]}
-      />
+          <ReferenceUpload
+            name={newPresetName}
+            onNameChange={setNewPresetName}
+            refText={refText}
+            onRefTextChange={setRefText}
+            tag={presetTag}
+            onTagChange={setPresetTag}
+            fileName={refFile?.name ?? null}
+            onFileSelected={setRefFile}
+            creating={creatingPreset}
+            onCreate={handleCreatePreset}
+          />
 
-      {error && <p className="error">{error}</p>}
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Style</h2>
+            </div>
+            <StyleSelector value={style} onChange={setStyle} />
+            <div className="panel-header panel-header-spaced">
+              <h2>Stability</h2>
+            </div>
+            <StabilitySelector value={stability} onChange={setStability} />
+            <div className="panel-header panel-header-spaced">
+              <h2>Language</h2>
+            </div>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {(languages.length ? languages : [language]).map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
+          </section>
 
-      <button
-        type="button"
-        className={generating ? 'generate-btn generate-btn-busy' : 'generate-btn'}
-        disabled={!canGenerate}
-        onClick={handleGenerate}
-      >
-        <WandIcon />
-        {generating
-          ? progress && progress.total > 1
-            ? `Generating... chunk ${progress.done}/${progress.total}`
-            : 'Generating...'
-          : 'Generate'}
-      </button>
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Scripts</h2>
+              <span className="count-badge">{scriptBlocks.length}</span>
+            </div>
+            <div className="script-blocks">
+              {scriptBlocks.map((block, i) => (
+                <ScriptBlock
+                  key={block.id}
+                  index={i}
+                  text={block.text}
+                  onTextChange={(text) => updateBlock(block.id, { text })}
+                  presetId={block.presetId}
+                  onPresetChange={(presetId) => updateBlock(block.id, { presetId })}
+                  presets={presets}
+                  onRemove={() => removeScriptBlock(block.id)}
+                  onMoveUp={() => moveBlock(block.id, -1)}
+                  onMoveDown={() => moveBlock(block.id, 1)}
+                  canMoveUp={i > 0}
+                  canMoveDown={i < scriptBlocks.length - 1}
+                  canRemove={scriptBlocks.length > 1}
+                />
+              ))}
+            </div>
+            <button type="button" className="add-script-btn" onClick={addScriptBlock}>
+              + Add another script
+            </button>
+          </section>
 
-      <AudioResult audioUrl={audioUrl} />
+          {error && <p className="error">{error}</p>}
 
-      <HistoryList history={history} onDelete={handleDeleteHistory} />
+          <button
+            type="button"
+            className={submittingAll ? 'generate-btn generate-btn-busy' : 'generate-btn'}
+            disabled={!canGenerateAll}
+            onClick={handleGenerateAll}
+          >
+            <WandIcon />
+            {submittingAll
+              ? 'Submitting...'
+              : `Generate All${validBlocks.length > 1 ? ` (${validBlocks.length})` : ''}`}
+          </button>
+        </>
+      ) : (
+        <>
+          <QueuePanel active={activeTab === 'queue'} />
+          <HistoryList history={history} onDelete={handleDeleteHistory} onRequeue={handleRequeue} />
+        </>
+      )}
     </div>
   )
 }

@@ -5,6 +5,8 @@ interface Props {
   onNameChange: (value: string) => void
   refText: string
   onRefTextChange: (value: string) => void
+  tag: string
+  onTagChange: (value: string) => void
   fileName: string | null
   onFileSelected: (file: File) => void
   creating: boolean
@@ -16,6 +18,8 @@ export default function ReferenceUpload({
   onNameChange,
   refText,
   onRefTextChange,
+  tag,
+  onTagChange,
   fileName,
   onFileSelected,
   creating,
@@ -49,6 +53,12 @@ export default function ReferenceUpload({
         value={refText}
         onChange={(e) => onRefTextChange(e.target.value)}
         rows={2}
+      />
+      <input
+        type="text"
+        placeholder={'Mood/style tag (e.g. "Cinematic", optional)'}
+        value={tag}
+        onChange={(e) => onTagChange(e.target.value)}
       />
       <button
         type="button"

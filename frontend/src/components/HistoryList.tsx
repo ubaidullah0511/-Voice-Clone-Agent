@@ -1,26 +1,21 @@
-import type { HistoryEntry } from '../api'
-import { TrashIcon } from './Icons'
+import { downloadUrl, type HistoryEntry } from '../api'
+import { useAudioActivity } from '../AudioActivityContext'
+import { downloadName, formatDuration, timeAgo } from '../format'
+import { TrashIcon, WandIcon } from './Icons'
 
 interface Props {
   history: HistoryEntry[]
   onDelete: (id: string) => void
+  onRequeue: (entry: HistoryEntry) => void
 }
 
 function truncate(text: string, max = 80): string {
   return text.length > max ? `${text.slice(0, max)}...` : text
 }
 
-function timeAgo(unixSeconds: number): string {
-  const diffMs = Date.now() - unixSeconds * 1000
-  const mins = Math.floor(diffMs / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  return new Date(unixSeconds * 1000).toLocaleDateString()
-}
+export default function HistoryList({ history, onDelete, onRequeue }: Props) {
+  const { setActiveAudio } = useAudioActivity()
 
-export default function HistoryList({ history, onDelete }: Props) {
   return (
     <section className="panel">
       <div className="panel-header">
@@ -43,11 +38,32 @@ export default function HistoryList({ history, onDelete }: Props) {
                 <span className="list-meta">{timeAgo(entry.created_at)}</span>
               </div>
               <p className="history-text">{truncate(entry.text)}</p>
+              <p className="list-meta">
+                estimated {formatDuration(entry.estimated_s)} -- actual {formatDuration(entry.generation_s)}
+              </p>
               <div className="list-actions">
-                <audio controls src={entry.audio_url} />
-                <a href={entry.audio_url} download className="download-link">
+                <audio
+                  controls
+                  src={entry.audio_url}
+                  onPlay={(e) => setActiveAudio(e.currentTarget)}
+                  onPause={() => setActiveAudio(null)}
+                  onEnded={() => setActiveAudio(null)}
+                />
+                <a
+                  href={downloadUrl(entry.audio_url, downloadName(entry.preset_name, entry.created_at))}
+                  download
+                  className="download-link"
+                >
                   Download
                 </a>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Re-queue with edits"
+                  onClick={() => onRequeue(entry)}
+                >
+                  <WandIcon size={14} />
+                </button>
                 <button
                   type="button"
                   className="icon-btn icon-btn-danger"

@@ -13,6 +13,9 @@ export interface Preset {
   language: string
   ref_text: string
   audio_path: string
+  tag: string
+  is_builtin: boolean
+  preview_url: string
   created_at: number
 }
 
@@ -26,20 +29,46 @@ export interface HistoryEntry {
   stability: string
   audio_url: string
   duration_s: number
+  generation_s: number | null
+  estimated_s: number | null
   created_at: number
 }
 
 export interface GenerateJobStart {
   job_id: string
   total_chunks: number
+  estimated_s: number
+  queue_position: number
 }
 
+export type JobStatusValue = 'queued' | 'running' | 'done' | 'error' | 'canceled'
+
 export interface JobStatus {
-  status: 'running' | 'done' | 'error'
+  status: JobStatusValue
   chunks_done: number
   total_chunks: number
   audio_url: string | null
   sample_rate: number | null
+  error: string | null
+  estimated_s: number | null
+  elapsed_s: number | null
+  eta_s: number | null
+  queue_position: number | null
+}
+
+export interface QueueEntry {
+  job_id: string
+  preset_name: string
+  text_preview: string
+  status: JobStatusValue
+  chunks_done: number
+  total_chunks: number
+  estimated_s: number | null
+  elapsed_s: number | null
+  eta_s: number | null
+  queue_position: number | null
+  submitted_at: number
+  audio_url: string | null
   error: string | null
 }
 
@@ -80,12 +109,14 @@ export function createPreset(
   audio: File,
   refText: string,
   language: string,
+  tag: string = '',
 ): Promise<Preset> {
   const form = new FormData()
   form.append('audio', audio)
   form.append('name', name)
   form.append('ref_text', refText)
   form.append('language', language)
+  form.append('tag', tag)
   return fetch('/api/presets', { method: 'POST', body: form }).then(parseOrThrow<Preset>)
 }
 
@@ -129,4 +160,34 @@ export function startGenerate(params: GenerateParams): Promise<GenerateJobStart>
 
 export function getJobStatus(jobId: string): Promise<JobStatus> {
   return fetch(`/api/jobs/${jobId}`).then(parseOrThrow<JobStatus>)
+}
+
+export function getEstimate(chars: number): Promise<{ estimated_s: number }> {
+  return fetch(`/api/estimate?chars=${chars}`).then(parseOrThrow<{ estimated_s: number }>)
+}
+
+/** Downloads always come back as a renamed .mp4 (converted server-side from
+ * the stored .wav, or served as-is if already .mp4) -- playback elsewhere in
+ * the app still uses the raw audio_url directly. */
+export function downloadUrl(audioUrl: string, name: string): string {
+  const filename = audioUrl.split('/').pop() ?? ''
+  return `/api/download/${filename}?name=${encodeURIComponent(name)}`
+}
+
+export function listQueue(): Promise<{ queue: QueueEntry[] }> {
+  return fetch('/api/queue').then(parseOrThrow<{ queue: QueueEntry[] }>)
+}
+
+export function cancelQueuedJob(jobId: string): Promise<{ ok: boolean }> {
+  return fetch(`/api/queue/${jobId}/cancel`, { method: 'POST' }).then(
+    parseOrThrow<{ ok: boolean }>,
+  )
+}
+
+export function reorderQueue(jobIds: string[]): Promise<{ ok: boolean }> {
+  return fetch('/api/queue/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ job_ids: jobIds }),
+  }).then(parseOrThrow<{ ok: boolean }>)
 }

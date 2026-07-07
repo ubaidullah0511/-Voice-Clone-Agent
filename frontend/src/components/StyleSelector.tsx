@@ -1,10 +1,12 @@
 import type { CSSProperties } from 'react'
 
+// Tints derived from the brand palette (#408175 teal / #b5b9f0 periwinkle)
+// so chip colors stay on-brand instead of an unrelated rainbow.
 const STYLES = [
-  { id: 'natural', color: '#64748b' },
-  { id: 'clear', color: '#06b6d4' },
-  { id: 'expressive', color: '#f59e0b' },
-  { id: 'dramatic', color: '#ec4899' },
+  { id: 'natural', color: '#7a8f89' },
+  { id: 'clear', color: '#b5b9f0' },
+  { id: 'expressive', color: '#6fa79a' },
+  { id: 'dramatic', color: '#7075c2' },
 ] as const
 
 interface Props {

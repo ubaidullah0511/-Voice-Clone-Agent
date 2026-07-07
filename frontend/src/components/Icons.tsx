@@ -33,3 +33,19 @@ export function CheckIcon({ size = 14 }: IconProps) {
     </svg>
   )
 }
+
+export function PlayIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M7 5v14l12-7Z" />
+    </svg>
+  )
+}
+
+export function PauseIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M7 5h4v14H7Zm6 0h4v14h-4Z" />
+    </svg>
+  )
+}
