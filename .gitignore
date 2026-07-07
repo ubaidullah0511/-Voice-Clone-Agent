@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Personal/generated data -- uploaded voice clips, generated audio, presets & history
+backend/storage/
+
+# Stray test artifacts
+backend/gen_resp.json
+
+# Env / secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
