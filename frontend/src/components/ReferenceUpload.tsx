@@ -8,7 +8,7 @@ interface Props {
   tag: string
   onTagChange: (value: string) => void
   fileName: string | null
-  onFileSelected: (file: File) => void
+  onFileSelected: (file: File | null) => void
   creating: boolean
   onCreate: () => void
 }
@@ -47,7 +47,22 @@ export default function ReferenceUpload({
         />
         <UploadIcon />
         {fileName ? <span>{fileName}</span> : <span>Click to choose a reference audio file</span>}
+        {fileName && (
+          <button
+            type="button"
+            className="dropzone-clear"
+            aria-label="Remove selected file"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onFileSelected(null)
+            }}
+          >
+            ×
+          </button>
+        )}
       </label>
+  
       <textarea
         placeholder="Exact transcript of the reference audio (leave blank to auto-transcribe)"
         value={refText}
