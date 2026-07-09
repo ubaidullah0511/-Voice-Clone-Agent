@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -10,14 +10,15 @@
   box-sizing: border-box;
 }
 
+/* Painted before any stylesheet-driven background resolves — kills the
+   white flash on load. */
+html {
+  background: #101113;
+}
+
 body {
   margin: 0;
-  font-family:
-    'Inter',
-    system-ui,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font-body);
 }
 
 #root {

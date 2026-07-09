@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { audioEngine } from './audio/AudioEngine'
 
 interface AudioActivityValue {
   activeAudio: HTMLAudioElement | null
@@ -13,6 +14,7 @@ export function AudioActivityProvider({ children }: { children: ReactNode }) {
 
   const setActiveAudio = (el: HTMLAudioElement | null) => {
     currentRef.current = el
+    if (el) audioEngine.attach(el)
     setActiveAudioState(el)
   }
 

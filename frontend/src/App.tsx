@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import ReferenceUpload from './components/ReferenceUpload'
 import VoiceGallery from './components/VoiceGallery'
@@ -9,8 +9,10 @@ import StabilitySelector from './components/StabilitySelector'
 import ScriptBlock from './components/ScriptBlock'
 import HistoryList from './components/HistoryList'
 import QueuePanel from './components/QueuePanel'
-import { WandIcon } from './components/Icons'
+import AmbientCanvas from './components/AmbientCanvas'
+import GenerateButton from './components/GenerateButton'
 import { MAX_SCRIPT_CHARS } from './constants'
+import { useGenerationActivity } from './GenerationActivityContext'
 import {
   ApiError,
   createPreset,
@@ -24,8 +26,7 @@ import {
   type HistoryEntry,
   type Preset,
 } from './api'
-
-type Tab = 'studio' | 'queue'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface ScriptBlockState {
   id: string
@@ -49,7 +50,6 @@ function newBlock(overrides: Partial<ScriptBlockState> = {}): ScriptBlockState {
 
 export default function App() {
   const [showLanding, setShowLanding] = useState(true)
-  const [activeTab, setActiveTab] = useState<Tab>('studio')
 
   const [modelStatus, setModelStatus] = useState<'checking' | 'ready' | 'down'>('checking')
   const [languages, setLanguages] = useState<string[]>([])
@@ -60,6 +60,7 @@ export default function App() {
   const [refFile, setRefFile] = useState<File | null>(null)
   const [refText, setRefText] = useState('')
   const [presetTag, setPresetTag] = useState('')
+  const [newVoiceOpen, setNewVoiceOpen] = useState(false) 
   const [creatingPreset, setCreatingPreset] = useState(false)
 
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -70,7 +71,12 @@ export default function App() {
   const [stability, setStability] = useState('balanced')
 
   const [submittingAll, setSubmittingAll] = useState(false)
+  const [pulseEpoch, setPulseEpoch] = useState(0)
   const [error, setError] = useState<string | null>(null)
+
+  const { queue, refresh: refreshQueue } = useGenerationActivity()
+  const generationsRef = useRef<HTMLDivElement>(null)
+  const scriptsRef = useRef<HTMLElement>(null)
 
   function refreshPresets() {
     listPresets()
@@ -115,6 +121,13 @@ export default function App() {
     }
   }, [])
 
+  // With the Queue tab gone, finished jobs should surface in Generations
+  // without a reload -- re-fetch history whenever another job completes.
+  const doneCount = queue.filter((e) => e.status === 'done').length
+  useEffect(() => {
+    if (doneCount > 0) refreshHistory()
+  }, [doneCount])
+
   async function handleCreatePreset() {
     if (!refFile) return
     setCreatingPreset(true)
@@ -156,7 +169,7 @@ export default function App() {
     setLanguage(entry.language)
     setStyle(entry.style)
     setStability(entry.stability)
-    setActiveTab('studio')
+    scriptsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function addScriptBlock() {
@@ -212,7 +225,9 @@ export default function App() {
         })
       }
       setScriptBlocks([newBlock()])
-      setActiveTab('queue')
+      setPulseEpoch((n) => n + 1)
+      refreshQueue()
+      generationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to submit batch')
     } finally {
@@ -227,46 +242,28 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header>
-        <button type="button" className="brand" onClick={() => setShowLanding(true)}>
-          <span className="logo-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <h1>Voice Clone Studio</h1>
-        </button>
-        <span className={`badge badge-${modelStatus}`}>
-          <span className="badge-dot" />
-          {modelStatus === 'ready'
-            ? 'Model ready'
-            : modelStatus === 'checking'
-              ? 'Loading model...'
-              : 'Backend unreachable'}
-        </span>
-      </header>
-
-      <div className="tab-bar">
-        <button
-          type="button"
-          className={activeTab === 'studio' ? 'tab tab-active' : 'tab'}
-          onClick={() => setActiveTab('studio')}
-        >
-          Studio
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'queue' ? 'tab tab-active' : 'tab'}
-          onClick={() => setActiveTab('queue')}
-        >
-          Queue & History
-        </button>
-      </div>
-
-      {activeTab === 'studio' ? (
-        <>
-          <AudioWaveform />
+    <>
+      <AmbientCanvas />
+      <div className="studio-shell">
+        <aside className="rail">
+          <div className="rail-brand">
+            <button type="button" className="brand" onClick={() => setShowLanding(true)}>
+              <span className="logo-mark">
+                <span />
+                <span />
+                <span />
+              </span>
+              <h1>Voice Clone Studio</h1>
+            </button>
+            <span className={`badge badge-${modelStatus}`}>
+              <span className="badge-dot" />
+              {modelStatus === 'ready'
+                ? 'Model ready'
+                : modelStatus === 'checking'
+                  ? 'Loading model...'
+                  : 'Backend unreachable'}
+            </span>
+          </div>
 
           <VoiceGallery
             presets={presets}
@@ -275,44 +272,80 @@ export default function App() {
             onDelete={handleDeletePreset}
           />
 
-          <ReferenceUpload
-            name={newPresetName}
-            onNameChange={setNewPresetName}
-            refText={refText}
-            onRefTextChange={setRefText}
-            tag={presetTag}
-            onTagChange={setPresetTag}
-            fileName={refFile?.name ?? null}
-            onFileSelected={setRefFile}
-            creating={creatingPreset}
-            onCreate={handleCreatePreset}
-          />
+          <div className="rail-new-voice">
+            <button
+              type="button"
+              className="new-voice-trigger"
+              onClick={() => setNewVoiceOpen((v) => !v)}
+              aria-expanded={newVoiceOpen}
+            >
+              <span className={`new-voice-trigger-icon ${newVoiceOpen ? 'is-open' : ''}`}>
 
-          <section className="panel">
-            <div className="panel-header">
-              <h2>Style</h2>
+              </span>
+              New voice
+            </button>
+
+            <AnimatePresence initial={false}>
+              {newVoiceOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.2, 0.9, 0.3, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <ReferenceUpload
+                    name={newPresetName}
+                    onNameChange={setNewPresetName}
+                    refText={refText}
+                    onRefTextChange={setRefText}
+                    tag={presetTag}
+                    onTagChange={setPresetTag}
+                    fileName={refFile?.name ?? null}
+                    onFileSelected={setRefFile}
+                    creating={creatingPreset}
+                    onCreate={handleCreatePreset}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </aside>
+
+        <main className="workspace">
+          <AudioWaveform />
+
+          <section className="panel console-strip">
+            <div className="console-cell">
+              <div className="panel-header">
+                <h2>Style</h2>
+              </div>
+              <StyleSelector value={style} onChange={setStyle} />
             </div>
-            <StyleSelector value={style} onChange={setStyle} />
-            <div className="panel-header panel-header-spaced">
-              <h2>Stability</h2>
+            <div className="console-cell">
+              <div className="panel-header">
+                <h2>Stability</h2>
+              </div>
+              <StabilitySelector value={stability} onChange={setStability} />
             </div>
-            <StabilitySelector value={stability} onChange={setStability} />
-            <div className="panel-header panel-header-spaced">
-              <h2>Language</h2>
+            <div className="console-cell">
+              <div className="panel-header">
+                <h2>Language</h2>
+              </div>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+                {(languages.length ? languages : [language]).map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-              {(languages.length ? languages : [language]).map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
-              ))}
-            </select>
           </section>
 
-          <section className="panel">
+          <section className="panel" ref={scriptsRef}>
             <div className="panel-header">
               <h2>Scripts</h2>
-              <span className="count-badge">{scriptBlocks.length}</span>
+              <span className="count-badge mono">{scriptBlocks.length}</span>
             </div>
             <div className="script-blocks">
               {scriptBlocks.map((block, i) => (
@@ -340,24 +373,24 @@ export default function App() {
 
           {error && <p className="error">{error}</p>}
 
-          <button
-            type="button"
-            className={submittingAll ? 'generate-btn generate-btn-busy' : 'generate-btn'}
+          <GenerateButton
             disabled={!canGenerateAll}
+            busy={submittingAll}
+            count={validBlocks.length}
+            pulseEpoch={pulseEpoch}
             onClick={handleGenerateAll}
-          >
-            <WandIcon />
-            {submittingAll
-              ? 'Submitting...'
-              : `Generate All${validBlocks.length > 1 ? ` (${validBlocks.length})` : ''}`}
-          </button>
-        </>
-      ) : (
-        <>
-          <QueuePanel active={activeTab === 'queue'} />
-          <HistoryList history={history} onDelete={handleDeleteHistory} onRequeue={handleRequeue} />
-        </>
-      )}
-    </div>
+          />
+
+          <div ref={generationsRef} className="generations">
+            <QueuePanel />
+            <HistoryList
+              history={history}
+              onDelete={handleDeleteHistory}
+              onRequeue={handleRequeue}
+            />
+          </div>
+        </main>
+      </div>
+    </>
   )
 }

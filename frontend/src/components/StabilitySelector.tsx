@@ -1,11 +1,11 @@
 import type { CSSProperties } from 'react'
 
-// Tints derived from the brand palette (#408175 teal / #b5b9f0 periwinkle),
-// lightened slightly where needed so --bg-primary text stays WCAG AA (4.5:1+).
+// Warm console tints from the Mastering Suite palette, light enough that
+// the dark chip text stays WCAG AA (4.5:1+) when selected.
 const LEVELS = [
-  { id: 'stable', color: '#4d9384' },
-  { id: 'balanced', color: '#b5b9f0' },
-  { id: 'creative', color: '#8a8fd1' },
+  { id: 'stable', color: '#c9cbd1' },
+  { id: 'balanced', color: '#e0b878' },
+  { id: 'creative', color: '#f0a83d' },
 ] as const
 
 interface Props {

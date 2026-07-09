@@ -1,12 +1,12 @@
 import type { CSSProperties } from 'react'
 
-// Tints derived from the brand palette (#408175 teal / #b5b9f0 periwinkle)
-// so chip colors stay on-brand instead of an unrelated rainbow.
+// Warm console tints from the Mastering Suite palette (#F0A83D amber core,
+// bronze and graphite neighbors) -- dark chip text stays readable on all.
 const STYLES = [
-  { id: 'natural', color: '#7a8f89' },
-  { id: 'clear', color: '#b5b9f0' },
-  { id: 'expressive', color: '#6fa79a' },
-  { id: 'dramatic', color: '#7075c2' },
+  { id: 'natural', color: '#b9955c' },
+  { id: 'clear', color: '#c9cbd1' },
+  { id: 'expressive', color: '#f0a83d' },
+  { id: 'dramatic', color: '#c77f2a' },
 ] as const
 
 interface Props {

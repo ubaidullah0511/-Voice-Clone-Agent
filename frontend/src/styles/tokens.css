@@ -1,0 +1,40 @@
+/* Mastering Suite design tokens — the studio's single source of truth.
+   The legacy teal/periwinkle block at the top of App.css remains only for
+   LandingPage.css; studio styles must use these. */
+:root {
+  --bg-base: #101113;
+  --bg-panel: rgba(30, 32, 35, 0.6); /* glass — always pairs with blur */
+  --bg-panel-solid: #1e2023; /* nested surfaces — NO backdrop-filter */
+  --bg-inset: rgba(16, 17, 19, 0.55); /* inputs, wells */
+  --text-primary: #edeae2;
+  --text-muted: #8b8d91;
+  --accent-amber: #f0a83d;
+  --accent-amber-soft: rgba(240, 168, 61, 0.16);
+  --accent-red: #e0564a; /* recording/error/destructive only */
+  --accent-red-soft: rgba(224, 86, 74, 0.16);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-border-strong: rgba(255, 255, 255, 0.16);
+  --blur-panel: 20px;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+
+  --shadow-float: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-press: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 3px 10px rgba(0, 0, 0, 0.5);
+  --glow-amber: 0 0 0 1px rgba(240, 168, 61, 0.35), 0 8px 28px rgba(240, 168, 61, 0.25);
+
+  --font-display: 'Archivo Variable', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,6 +1,6 @@
 import { downloadUrl, type HistoryEntry } from '../api'
-import { useAudioActivity } from '../AudioActivityContext'
 import { downloadName, formatDuration, timeAgo } from '../format'
+import ClipPlayer from './ClipPlayer'
 import { TrashIcon, WandIcon } from './Icons'
 
 interface Props {
@@ -14,13 +14,11 @@ function truncate(text: string, max = 80): string {
 }
 
 export default function HistoryList({ history, onDelete, onRequeue }: Props) {
-  const { setActiveAudio } = useAudioActivity()
-
   return (
     <section className="panel">
       <div className="panel-header">
-        <h2>History</h2>
-        {history.length > 0 && <span className="count-badge">{history.length}</span>}
+        <h2>Generations</h2>
+        {history.length > 0 && <span className="count-badge mono">{history.length}</span>}
       </div>
 
       {history.length === 0 ? (
@@ -35,19 +33,19 @@ export default function HistoryList({ history, onDelete, onRequeue }: Props) {
                   <span className="badge-pill">{entry.style}</span>
                   <span className="badge-pill">{entry.stability}</span>
                 </div>
-                <span className="list-meta">{timeAgo(entry.created_at)}</span>
+                <span className="list-meta mono">{timeAgo(entry.created_at)}</span>
               </div>
               <p className="history-text">{truncate(entry.text)}</p>
-              <p className="list-meta">
-                estimated {formatDuration(entry.estimated_s)} -- actual {formatDuration(entry.generation_s)}
+              <p className="list-meta mono">
+                estimated {formatDuration(entry.estimated_s)} -- actual{' '}
+                {formatDuration(entry.generation_s)}
               </p>
               <div className="list-actions">
-                <audio
-                  controls
+                <ClipPlayer
                   src={entry.audio_url}
-                  onPlay={(e) => setActiveAudio(e.currentTarget)}
-                  onPause={() => setActiveAudio(null)}
-                  onEnded={() => setActiveAudio(null)}
+                  durationS={entry.duration_s}
+                  entryKey={entry.id}
+                  label={`${entry.preset_name} clip`}
                 />
                 <a
                   href={downloadUrl(entry.audio_url, downloadName(entry.preset_name, entry.created_at))}
