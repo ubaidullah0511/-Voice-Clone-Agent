@@ -8,3 +8,8 @@ soundfile
 numpy
 faster-whisper
 av
+clerk-backend-api
+filelock
+python-dotenv
+PyJWT
+cryptography

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import sys
 import threading
@@ -14,12 +15,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, pa
 import numpy as np
 import torch
 import soundfile as sf
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from filelock import FileLock
 from pydantic import BaseModel
 
+load_dotenv(Path(__file__).parent / ".env")
+
+import credits
+from auth import get_current_user
+from config.plans import DEFAULT_PLAN, PLANS
 from qwen import FasterQwen3TTS
 from audio_convert import wav_to_mp4, write_mp4
 from audio_stitcher import stitch_audio
@@ -43,7 +51,13 @@ def _transcribe_audio(path: str) -> str:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voice_clone_studio")
 
-MODEL_PATH = r"D:\models_cache\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc"
+# Overridable via MODEL_PATH in backend/.env -- the default below only holds
+# on the original dev machine's local model cache. Any other host (including
+# a RunPod pod) must set MODEL_PATH to wherever it downloaded the snapshot.
+MODEL_PATH = os.environ.get(
+    "MODEL_PATH",
+    r"D:\models_cache\models--Qwen--Qwen3-TTS-12Hz-0.6B-Base\snapshots\5d83992436eae1d760afd27aff78a71d676296fc",
+)
 
 STORAGE_DIR = Path(__file__).parent / "storage"
 REF_DIR = STORAGE_DIR / "references"
@@ -136,10 +150,15 @@ def _load_json(path: Path) -> list:
 
 
 def _save_json(path: Path, data: list) -> None:
-    tmp = path.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    tmp.replace(path)
+    # File lock (not just the in-process _store_lock) so concurrent writers
+    # across processes -- e.g. a second backend instance started by mistake --
+    # can't interleave writes to the same file.
+    lock = FileLock(str(path) + ".lock", timeout=10)
+    with lock:
+        tmp = path.with_suffix(".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        tmp.replace(path)
 
 
 _presets: list[dict] = _load_json(PRESETS_FILE)  # newest first
@@ -243,6 +262,7 @@ def _persist_queue_locked() -> None:
         job = _jobs[job_id]
         records.append({
             "job_id": job_id,
+            "user_id": job["user_id"],
             "preset_id": job["preset_id"],
             "text": job["text"],
             "language": job["language"],
@@ -279,6 +299,10 @@ def _restore_queue_on_startup() -> None:
             chunks = chunk_text(text, CHUNK_MAX_CHARS)
             job_id = record["job_id"]
             _jobs[job_id] = {
+                # .get(), not [] -- queue.json written before the multiuser
+                # migration won't have this key. Such orphaned jobs just won't
+                # surface in any user's queue until migrate_to_multiuser.py runs.
+                "user_id": record.get("user_id"),
                 "status": "queued",
                 "preset_id": preset["id"],
                 "preset_name": preset["name"],
@@ -326,6 +350,7 @@ def _process_job(job_id: str) -> None:
             job.update(status="error", error="Preset was deleted before this job could run.")
             _current_running_job_id = None
             _persist_queue_locked()
+        credits.release_reservation(job["user_id"])
         return
     preset = live_preset
 
@@ -379,6 +404,7 @@ def _process_job(job_id: str) -> None:
                 job.update(status="error", error=error_msg, finished_at=time.time())
                 _current_running_job_id = None
                 _persist_queue_locked()
+            credits.release_reservation(job["user_id"])
             return
 
         audio_chunks.append(audio_arrays[0])
@@ -402,6 +428,7 @@ def _process_job(job_id: str) -> None:
 
     entry = {
         "id": uuid.uuid4().hex,
+        "user_id": job["user_id"],
         "preset_id": preset["id"],
         "preset_name": preset["name"],
         "text": text,
@@ -422,6 +449,7 @@ def _process_job(job_id: str) -> None:
         job.update(status="done", audio_url=audio_url, sample_rate=sr, finished_at=finished_at)
         _current_running_job_id = None
         _persist_queue_locked()
+    credits.consume_reservation(job["user_id"])
 
 
 def _worker_loop() -> None:
@@ -444,6 +472,7 @@ def _worker_loop() -> None:
                 global _current_running_job_id
                 _current_running_job_id = None
                 _persist_queue_locked()
+            credits.release_reservation(_jobs[job_id]["user_id"])
 
 
 @asynccontextmanager
@@ -462,10 +491,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Overridable via ALLOWED_ORIGINS in backend/.env (comma-separated) -- the
+# localhost default only covers the Vite dev server on the same machine.
+# A RunPod (or any other) deployment reached through a different origin --
+# e.g. a proxied *.proxy.runpod.net domain -- must add that origin here or
+# the browser will block the frontend's authenticated API calls.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()
+]
+
 app = FastAPI(title="CloneVoicePrompt-style TTS API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -530,6 +568,24 @@ def estimate(chars: int) -> dict:
     return {"estimated_s": _estimate_seconds(max(chars, 0))}
 
 
+@app.get("/api/account")
+def get_account(user_id: str = Depends(get_current_user)) -> dict:
+    user = credits.get_user(user_id)
+    if user is None:
+        raise HTTPException(404, "User not found")
+    plan = PLANS.get(user["plan"], PLANS[DEFAULT_PLAN])
+    return {
+        "user_id": user["user_id"],
+        "email": user.get("email"),
+        "plan": user["plan"],
+        "unlimited": plan["unlimited"],
+        "credits_remaining": user["credits_remaining"],
+        "credits_reserved": user["credits_reserved"],
+        "credits_total": plan["credits_per_month"],
+        "credits_reset_at": user["credits_reset_at"],
+    }
+
+
 def _preset_response(preset: dict) -> dict:
     """Add fields derivable/servable at read time without persisting them
     redundantly (preview_url is just the reference file exposed over HTTP)."""
@@ -537,8 +593,8 @@ def _preset_response(preset: dict) -> dict:
 
 
 @app.get("/api/presets")
-def list_presets():
-    return {"presets": [_preset_response(p) for p in _presets]}
+def list_presets(user_id: str = Depends(get_current_user)):
+    return {"presets": [_preset_response(p) for p in _presets if p.get("user_id") == user_id]}
 
 
 @app.post("/api/presets")
@@ -548,6 +604,7 @@ async def create_preset(
     ref_text: str = Form(""),
     language: str = Form("English"),
     tag: str = Form(""),
+    user_id: str = Depends(get_current_user),
 ):
     name = name.strip()
     ref_text = ref_text.strip()
@@ -615,6 +672,7 @@ async def create_preset(
 
     preset = {
         "id": preset_id,
+        "user_id": user_id,
         "name": name,
         "language": language,
         "ref_text": ref_text,
@@ -630,9 +688,9 @@ async def create_preset(
 
 
 @app.delete("/api/presets/{preset_id}")
-def delete_preset(preset_id: str):
+def delete_preset(preset_id: str, user_id: str = Depends(get_current_user)):
     preset = _find_preset(preset_id)
-    if preset is None:
+    if preset is None or preset.get("user_id") != user_id:
         raise HTTPException(404, "Unknown preset_id")
     with _store_lock:
         _presets.remove(preset)
@@ -642,14 +700,14 @@ def delete_preset(preset_id: str):
 
 
 @app.get("/api/history")
-def list_history():
-    return {"history": _history}
+def list_history(user_id: str = Depends(get_current_user)):
+    return {"history": [h for h in _history if h.get("user_id") == user_id]}
 
 
 @app.delete("/api/history/{entry_id}")
-def delete_history_entry(entry_id: str):
+def delete_history_entry(entry_id: str, user_id: str = Depends(get_current_user)):
     entry = next((h for h in _history if h["id"] == entry_id), None)
-    if entry is None:
+    if entry is None or entry.get("user_id") != user_id:
         raise HTTPException(404, "Unknown history entry_id")
     with _store_lock:
         _history.remove(entry)
@@ -747,11 +805,11 @@ def _queue_entry_locked(job_id: str) -> QueueEntry:
 
 
 @app.post("/api/generate", status_code=202)
-def generate(req: GenerateRequest) -> GenerateJobStart:
+def generate(req: GenerateRequest, user_id: str = Depends(get_current_user)) -> GenerateJobStart:
     if _tts is None:
         raise HTTPException(503, "Model not loaded yet")
     preset = _find_preset(req.preset_id)
-    if preset is None:
+    if preset is None or preset.get("user_id") != user_id:
         raise HTTPException(404, "Unknown preset_id -- create a preset first")
     text = req.text.strip()
     if not text:
@@ -768,10 +826,18 @@ def generate(req: GenerateRequest) -> GenerateJobStart:
     if stability not in STABILITY_PARAMS:
         raise HTTPException(400, f"Unknown stability '{req.stability}'")
 
+    # Reserved at submit time (not on job start) so a burst of queued jobs
+    # can't overrun a free-tier budget before any of them complete -- see
+    # credits.reserve_credit for the atomicity guarantee under concurrent
+    # requests.
+    if not credits.reserve_credit(user_id):
+        raise HTTPException(402, "No credits remaining for this billing period.")
+
     chunks = chunk_text(text, CHUNK_MAX_CHARS)
     estimated_s = _estimate_seconds(len(text))
     job_id = uuid.uuid4().hex
     job = {
+        "user_id": user_id,
         "status": "queued",
         "preset_id": preset["id"],
         "preset_name": preset["name"],
@@ -800,24 +866,28 @@ def generate(req: GenerateRequest) -> GenerateJobStart:
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str) -> JobStatusResponse:
+def get_job(job_id: str, user_id: str = Depends(get_current_user)) -> JobStatusResponse:
     with _jobs_lock:
-        if job_id not in _jobs:
+        if job_id not in _jobs or _jobs[job_id].get("user_id") != user_id:
             raise HTTPException(404, "Unknown job_id")
         return _job_status_response_locked(job_id)
 
 
 @app.get("/api/queue")
-def list_queue() -> dict:
+def list_queue(user_id: str = Depends(get_current_user)) -> dict:
     with _jobs_lock:
-        entries = [_queue_entry_locked(job_id) for job_id in _jobs]
+        entries = [
+            _queue_entry_locked(job_id)
+            for job_id, job in _jobs.items()
+            if job.get("user_id") == user_id
+        ]
     return {"queue": entries}
 
 
 @app.post("/api/queue/{job_id}/cancel")
-def cancel_queued_job(job_id: str):
+def cancel_queued_job(job_id: str, user_id: str = Depends(get_current_user)):
     with _jobs_lock:
-        if job_id not in _jobs:
+        if job_id not in _jobs or _jobs[job_id].get("user_id") != user_id:
             raise HTTPException(404, "Unknown job_id")
         if job_id not in _pending_job_ids:
             raise HTTPException(
@@ -826,17 +896,56 @@ def cancel_queued_job(job_id: str):
         _pending_job_ids.remove(job_id)
         _jobs[job_id].update(status="canceled", finished_at=time.time())
         _persist_queue_locked()
+    credits.release_reservation(user_id)
     return {"ok": True}
 
 
 @app.post("/api/queue/reorder")
-def reorder_queue(req: ReorderRequest):
+def reorder_queue(req: ReorderRequest, user_id: str = Depends(get_current_user)):
     with _jobs_lock:
-        if set(req.job_ids) != set(_pending_job_ids):
+        owned_pending = [jid for jid in _pending_job_ids if _jobs[jid].get("user_id") == user_id]
+        if set(req.job_ids) != set(owned_pending):
             raise HTTPException(
                 400,
                 "job_ids must be exactly the set of currently queued (not yet started) job ids.",
             )
-        _pending_job_ids[:] = req.job_ids
+        # Splice this user's jobs back into their own slots in the new order,
+        # preserving the relative position of every other user's queued jobs
+        # (the FIFO queue is shared, so reordering must not let one user's
+        # request move another user's job earlier or later).
+        new_order = iter(req.job_ids)
+        _pending_job_ids[:] = [
+            next(new_order) if _jobs[jid].get("user_id") == user_id else jid
+            for jid in _pending_job_ids
+        ]
         _persist_queue_locked()
     return {"ok": True}
+
+
+# ---- Frontend (production) --------------------------------------------------
+# Serves the built React app so a deployed pod's single exposed port is the
+# only origin the browser ever talks to. Registered last -- Starlette checks
+# routes in registration order and stops at the first match, so every
+# /api/*, /audio/*, and /refs/* route above always wins first; this can never
+# shadow them. Only activates when frontend/dist exists (i.e. `npm run build`
+# has run) -- in local dev, where Vite's own dev server handles the frontend
+# on :5173, frontend/dist doesn't exist and this block never registers.
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.is_dir():
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        if full_path.startswith("api/"):
+            # A genuinely unmatched /api/* path -- report a real 404 instead
+            # of silently handing back index.html and masking the bug.
+            raise HTTPException(404, "Not Found")
+
+        candidate = (FRONTEND_DIST / full_path).resolve()
+        if full_path and FRONTEND_DIST.resolve() in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+
+        # Everything else -- including client-side routes like /studio,
+        # /sign-in, /sign-up -- falls through to index.html; React Router
+        # takes over from there.
+        return FileResponse(FRONTEND_DIST / "index.html")

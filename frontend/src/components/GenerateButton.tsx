@@ -9,6 +9,7 @@ interface Props {
   /** Increment to fire the one-shot pulse ring (keyed remount). */
   pulseEpoch: number
   onClick: () => void
+  noCredits?: boolean
 }
 
 // framer-motion interpolates box-shadows only between literal strings, so
@@ -20,7 +21,14 @@ const SHADOW_HOVER =
 const SHADOW_TAP =
   '0 1px 0 rgba(255,255,255,0.06) inset, 0 3px 10px rgba(0,0,0,0.50), 0 2px 8px rgba(240,168,61,0.30)'
 
-export default function GenerateButton({ disabled, busy, count, pulseEpoch, onClick }: Props) {
+export default function GenerateButton({
+  disabled,
+  busy,
+  count,
+  pulseEpoch,
+  onClick,
+  noCredits,
+}: Props) {
   const reducedMotion = usePrefersReducedMotion()
   const interactive = !disabled && !reducedMotion
 
@@ -47,8 +55,8 @@ export default function GenerateButton({ disabled, busy, count, pulseEpoch, onCl
         transition={{ type: 'spring', stiffness: 400, damping: 26 }}
       >
         <WandIcon />
-        <span>{busy ? 'Submitting...' : 'Generate all'}</span>
-        {!busy && count > 1 && <span className="mono generate-count">{count}</span>}
+        <span>{busy ? 'Submitting...' : noCredits ? 'No credits remaining' : 'Generate all'}</span>
+        {!busy && !noCredits && count > 1 && <span className="mono generate-count">{count}</span>}
       </motion.button>
     </div>
   )

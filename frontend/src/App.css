@@ -114,6 +114,21 @@ body {
   gap: 12px;
 }
 
+.account-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-loading {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: var(--bg-base);
+}
+
 .brand {
   display: flex;
   align-items: center;

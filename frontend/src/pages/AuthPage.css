@@ -1,0 +1,54 @@
+.auth-page {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.auth-page-brand {
+  position: fixed;
+  top: 28px;
+  left: 28px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+/* Same glass recipe as .modal-confirm (panel + stronger blur/gradient/shadow) --
+   the Clerk widget's own card chrome is stripped via the appearance prop so
+   only this outer glass shows. */
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--bg-panel) 92%, white 8%),
+    var(--bg-panel)
+  );
+  backdrop-filter: blur(calc(var(--blur-panel) * 1.6));
+  -webkit-backdrop-filter: blur(calc(var(--blur-panel) * 1.6));
+  border: 1px solid var(--panel-border-strong);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 28px;
+  display: flex;
+  justify-content: center;
+  animation: modal-pop-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.auth-card > * {
+  width: 100%;
+}

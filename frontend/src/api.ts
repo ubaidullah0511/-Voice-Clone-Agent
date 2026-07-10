@@ -76,6 +76,17 @@ export interface ApiErrorBody {
   detail: string
 }
 
+export interface Account {
+  user_id: string
+  email: string | null
+  plan: string
+  unlimited: boolean
+  credits_remaining: number
+  credits_reserved: number
+  credits_total: number
+  credits_reset_at: number
+}
+
 export class ApiError extends Error {}
 
 async function parseOrThrow<T>(res: Response): Promise<T> {
@@ -92,6 +103,20 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** window.Clerk is set by <ClerkProvider> (typed globally by @clerk/react) --
+ * reading the session token this way keeps auth out of every call site below,
+ * without needing a React hook in a plain module. */
+async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+  const token = await window.Clerk?.session?.getToken()
+  return fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+}
+
 export function getHealth(): Promise<HealthResponse> {
   return fetch('/api/health').then(parseOrThrow<HealthResponse>)
 }
@@ -100,8 +125,12 @@ export function getLanguages(): Promise<LanguagesResponse> {
   return fetch('/api/languages').then(parseOrThrow<LanguagesResponse>)
 }
 
+export function getAccount(): Promise<Account> {
+  return authFetch('/api/account').then(parseOrThrow<Account>)
+}
+
 export function listPresets(): Promise<{ presets: Preset[] }> {
-  return fetch('/api/presets').then(parseOrThrow<{ presets: Preset[] }>)
+  return authFetch('/api/presets').then(parseOrThrow<{ presets: Preset[] }>)
 }
 
 export function createPreset(
@@ -117,21 +146,21 @@ export function createPreset(
   form.append('ref_text', refText)
   form.append('language', language)
   form.append('tag', tag)
-  return fetch('/api/presets', { method: 'POST', body: form }).then(parseOrThrow<Preset>)
+  return authFetch('/api/presets', { method: 'POST', body: form }).then(parseOrThrow<Preset>)
 }
 
 export function deletePreset(presetId: string): Promise<{ ok: boolean }> {
-  return fetch(`/api/presets/${presetId}`, { method: 'DELETE' }).then(
+  return authFetch(`/api/presets/${presetId}`, { method: 'DELETE' }).then(
     parseOrThrow<{ ok: boolean }>,
   )
 }
 
 export function listHistory(): Promise<{ history: HistoryEntry[] }> {
-  return fetch('/api/history').then(parseOrThrow<{ history: HistoryEntry[] }>)
+  return authFetch('/api/history').then(parseOrThrow<{ history: HistoryEntry[] }>)
 }
 
 export function deleteHistoryEntry(entryId: string): Promise<{ ok: boolean }> {
-  return fetch(`/api/history/${entryId}`, { method: 'DELETE' }).then(
+  return authFetch(`/api/history/${entryId}`, { method: 'DELETE' }).then(
     parseOrThrow<{ ok: boolean }>,
   )
 }
@@ -145,7 +174,7 @@ export interface GenerateParams {
 }
 
 export function startGenerate(params: GenerateParams): Promise<GenerateJobStart> {
-  return fetch('/api/generate', {
+  return authFetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -159,7 +188,7 @@ export function startGenerate(params: GenerateParams): Promise<GenerateJobStart>
 }
 
 export function getJobStatus(jobId: string): Promise<JobStatus> {
-  return fetch(`/api/jobs/${jobId}`).then(parseOrThrow<JobStatus>)
+  return authFetch(`/api/jobs/${jobId}`).then(parseOrThrow<JobStatus>)
 }
 
 export function getEstimate(chars: number): Promise<{ estimated_s: number }> {
@@ -175,17 +204,17 @@ export function downloadUrl(audioUrl: string, name: string): string {
 }
 
 export function listQueue(): Promise<{ queue: QueueEntry[] }> {
-  return fetch('/api/queue').then(parseOrThrow<{ queue: QueueEntry[] }>)
+  return authFetch('/api/queue').then(parseOrThrow<{ queue: QueueEntry[] }>)
 }
 
 export function cancelQueuedJob(jobId: string): Promise<{ ok: boolean }> {
-  return fetch(`/api/queue/${jobId}/cancel`, { method: 'POST' }).then(
+  return authFetch(`/api/queue/${jobId}/cancel`, { method: 'POST' }).then(
     parseOrThrow<{ ok: boolean }>,
   )
 }
 
 export function reorderQueue(jobIds: string[]): Promise<{ ok: boolean }> {
-  return fetch('/api/queue/reorder', {
+  return authFetch('/api/queue/reorder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ job_ids: jobIds }),

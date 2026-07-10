@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useAuth } from '@clerk/react'
 import { listQueue, type QueueEntry } from './api'
 import { usePageVisible } from './hooks/usePageVisible'
 
@@ -26,11 +27,18 @@ export function GenerationActivityProvider({ children }: { children: ReactNode }
   const [queue, setQueue] = useState<QueueEntry[]>([])
   const [nonce, setNonce] = useState(0)
   const visible = usePageVisible()
+  const { isSignedIn } = useAuth()
   const queueRef = useRef(queue)
   queueRef.current = queue
 
+  // Clear stale queue state on sign-out/switch so a new session never
+  // briefly shows the previous user's jobs.
   useEffect(() => {
-    if (!visible) return
+    if (!isSignedIn) setQueue([])
+  }, [isSignedIn])
+
+  useEffect(() => {
+    if (!visible || !isSignedIn) return
     let cancelled = false
     let timer: number | undefined
 
@@ -53,7 +61,7 @@ export function GenerationActivityProvider({ children }: { children: ReactNode }
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [visible, nonce])
+  }, [visible, isSignedIn, nonce])
 
   const value = useMemo<GenerationActivityValue>(() => {
     const runningPresetNames = new Set(
