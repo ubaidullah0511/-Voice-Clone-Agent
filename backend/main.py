@@ -572,6 +572,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    
 )
 app.mount("/audio", StaticFiles(directory=str(GEN_DIR)), name="audio")
 app.mount("/refs", StaticFiles(directory=str(REF_DIR)), name="refs")

@@ -73,6 +73,7 @@ export default function ClipPlayer({ src, durationS, entryKey, label }: Props) {
       </span>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
+        crossOrigin="anonymous"
         ref={audioRef}
         src={src}
         preload="none"

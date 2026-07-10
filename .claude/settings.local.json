@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//root/.ssh/**)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(npx --no-install vercel --version)",
+      "Bash(npx --no-install vercel ls)"
+    ]
+  }
+}

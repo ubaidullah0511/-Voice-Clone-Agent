@@ -14,6 +14,11 @@
 // stateless across invocations.
 export const config = { runtime: 'edge' }
 
+// Edge Functions polyfill `process.env` but don't provide the rest of the
+// Node.js API surface, so we declare just this instead of pulling in
+// @types/node (which would incorrectly imply fs/Buffer/etc. are available).
+declare const process: { env: Record<string, string | undefined> }
+
 type WakeStatus = 'starting' | 'ready' | 'error'
 
 interface WakeResponse {

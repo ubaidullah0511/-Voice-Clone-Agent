@@ -214,6 +214,7 @@ export default function VoiceGallery({ presets, selectedPresetId, onSelect, onDe
           meter react to voice previews too. */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
+        crossOrigin="anonymous"
         ref={audioRef}
         onPlay={(e) => setActiveAudio(e.currentTarget)}
         onPause={(e) => {
