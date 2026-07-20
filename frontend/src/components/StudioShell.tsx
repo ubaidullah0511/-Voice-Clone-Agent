@@ -4,14 +4,11 @@ import '../App.css'
 import ReferenceUpload from './ReferenceUpload'
 import VoiceGallery from './VoiceGallery'
 import AudioWaveform from './AudioWaveform'
-import StyleSelector from './StyleSelector'
-import StabilitySelector from './StabilitySelector'
 import ScriptBlock from './ScriptBlock'
 import HistoryList from './HistoryList'
 import QueuePanel from './QueuePanel'
 import AmbientCanvas from './AmbientCanvas'
 import GenerateButton from './GenerateButton'
-import AccountBadge from './AccountBadge'
 import { MAX_SCRIPT_CHARS } from '../constants'
 import { useGenerationActivity } from '../GenerationActivityContext'
 import { wakeBackend } from '../wake'
@@ -64,8 +61,6 @@ export default function StudioShell() {
 
   const [newPresetName, setNewPresetName] = useState('')
   const [refFile, setRefFile] = useState<File | null>(null)
-  const [refText, setRefText] = useState('')
-  const [presetTag, setPresetTag] = useState('')
   const [newVoiceOpen, setNewVoiceOpen] = useState(false)
   const [creatingPreset, setCreatingPreset] = useState(false)
 
@@ -73,8 +68,6 @@ export default function StudioShell() {
 
   const [scriptBlocks, setScriptBlocks] = useState<ScriptBlockState[]>([newBlock()])
   const [language, setLanguage] = useState('English')
-  const [style, setStyle] = useState('natural')
-  const [stability, setStability] = useState('balanced')
 
   const [submittingAll, setSubmittingAll] = useState(false)
   const [pulseEpoch, setPulseEpoch] = useState(0)
@@ -159,12 +152,10 @@ export default function StudioShell() {
     setCreatingPreset(true)
     setError(null)
     try {
-      const preset = await createPreset(newPresetName, refFile, refText, language, presetTag)
+      const preset = await createPreset(newPresetName, refFile, '', language, '')
       setPresets((prev) => [preset, ...prev])
       setNewPresetName('')
       setRefFile(null)
-      setRefText('')
-      setPresetTag('')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to save preset')
     } finally {
@@ -193,8 +184,6 @@ export default function StudioShell() {
   function handleRequeue(entry: HistoryEntry) {
     setScriptBlocks([newBlock({ text: entry.text, presetId: entry.preset_id })])
     setLanguage(entry.language)
-    setStyle(entry.style)
-    setStability(entry.stability)
     scriptsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -268,8 +257,6 @@ export default function StudioShell() {
           presetId: block.presetId as string,
           text: block.text,
           language,
-          style,
-          stability,
         })
       }
       setScriptBlocks([newBlock()])
@@ -325,7 +312,6 @@ export default function StudioShell() {
                 Retry
               </button>
             )}
-            <AccountBadge account={account} />
           </div>
 
           <VoiceGallery
@@ -360,10 +346,6 @@ export default function StudioShell() {
                   <ReferenceUpload
                     name={newPresetName}
                     onNameChange={setNewPresetName}
-                    refText={refText}
-                    onRefTextChange={setRefText}
-                    tag={presetTag}
-                    onTagChange={setPresetTag}
                     fileName={refFile?.name ?? null}
                     onFileSelected={setRefFile}
                     creating={creatingPreset}
@@ -379,18 +361,6 @@ export default function StudioShell() {
           <AudioWaveform />
 
           <section className="panel console-strip">
-            <div className="console-cell">
-              <div className="panel-header">
-                <h2>Style</h2>
-              </div>
-              <StyleSelector value={style} onChange={setStyle} />
-            </div>
-            <div className="console-cell">
-              <div className="panel-header">
-                <h2>Stability</h2>
-              </div>
-              <StabilitySelector value={stability} onChange={setStability} />
-            </div>
             <div className="console-cell">
               <div className="panel-header">
                 <h2>Language</h2>
@@ -448,11 +418,7 @@ export default function StudioShell() {
 
           <div ref={generationsRef} className="generations">
             <QueuePanel />
-            <HistoryList
-              history={history}
-              onDelete={handleDeleteHistory}
-              onRequeue={handleRequeue}
-            />
+            <HistoryList history={history} onDelete={handleDeleteHistory} onRequeue={handleRequeue} />
           </div>
         </main>
       </div>

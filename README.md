@@ -52,7 +52,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```bash
 # Terminal 2 -- frontend (proxies /api and /audio to the backend, see vite.config.ts)
 cd webapp/frontend
-npm run dev
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://localhost:5173**.

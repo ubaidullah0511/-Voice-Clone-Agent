@@ -1,3 +1,5 @@
+import { getHealth } from './api'
+
 export type WakeStatus = 'starting' | 'ready' | 'error'
 
 interface WakeResponse {
@@ -11,6 +13,18 @@ const POLL_INTERVAL_MS = 3000
 const CLIENT_TIMEOUT_MS = 130_000
 
 async function callWake(startedAt: number): Promise<WakeResponse> {
+  // `/api/wake` is a Vercel Edge Function that only exists on the deployed
+  // site -- in local dev there's no RunPod pod to wake, and the Vite dev
+  // server would just serve index.html for that path (never erroring, never
+  // resolving), so go straight to the local backend's own health check.
+  if (import.meta.env.DEV) {
+    try {
+      const health = await getHealth()
+      return { status: health.model_loaded ? 'ready' : 'starting' }
+    } catch {
+      return { status: 'error', message: 'Could not reach the local backend. Is it running?' }
+    }
+  }
   const res = await fetch(`/api/wake?startedAt=${startedAt}`)
   if (!res.ok) {
     return { status: 'error', message: `Wake endpoint returned HTTP ${res.status}.` }

@@ -96,11 +96,11 @@ export default function AudioWaveform() {
         const radius = Math.min(barWidth / 2, 3)
 
         const grad = ctx2d!.createLinearGradient(0, y, 0, y + barHeight)
-        grad.addColorStop(0, `rgba(240, 168, 61, ${alpha})`)
-        grad.addColorStop(1, `rgba(199, 127, 42, ${alpha * 0.7})`)
+        grad.addColorStop(0, `rgba(59, 130, 246, ${alpha})`)
+        grad.addColorStop(1, `rgba(37, 99, 235, ${alpha * 0.7})`)
 
         ctx2d!.fillStyle = grad
-        ctx2d!.shadowColor = 'rgba(240, 168, 61, 0.45)'
+        ctx2d!.shadowColor = 'rgba(59, 130, 246, 0.45)'
         ctx2d!.shadowBlur = 8 * centerFactor + 2
 
         ctx2d!.beginPath()

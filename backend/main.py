@@ -30,7 +30,7 @@ import credits
 from auth import get_current_user, get_last_activity
 from config.plans import DEFAULT_PLAN, PLANS
 from qwen import FasterQwen3TTS
-from audio_convert import wav_to_mp4, write_mp4
+from audio_convert import wav_to_mp3, write_mp3
 from audio_stitcher import stitch_audio
 from text_chunker import chunk_text
 
@@ -426,8 +426,8 @@ def _process_job(job_id: str) -> None:
         logger.info("Job %s: chunk %d/%d done", job_id, i + 1, len(chunks))
 
     final_audio = stitch_audio(audio_chunks, sr, gap_seconds=STITCH_GAP_SECONDS)
-    out_name = f"{uuid.uuid4().hex}.mp4"
-    write_mp4(final_audio, sr, str(GEN_DIR / out_name))
+    out_name = f"{uuid.uuid4().hex}.mp3"
+    write_mp3(final_audio, sr, str(GEN_DIR / out_name))
     audio_url = f"/audio/{out_name}"
     output_duration_s = len(final_audio) / sr
     finished_at = time.time()
@@ -585,32 +585,32 @@ def _safe_filename(name: str) -> str:
 
 @app.get("/api/download/{filename}")
 def download_audio(filename: str, name: str = "voice_clone"):
-    """Serve a generated clip as a renamed .mp4 download. New generations are
-    written as .mp4 directly (see write_mp4 in _process_job) and are served
+    """Serve a generated clip as a renamed .mp3 download. New generations are
+    written as .mp3 directly (see write_mp3 in _process_job) and are served
     as-is here. History entries from before that change still point at an
     on-disk .wav -- those get converted (via PyAV) and cached on first hit."""
     src_path = (GEN_DIR / filename).resolve()
     if (
         GEN_DIR.resolve() not in src_path.parents
-        or src_path.suffix.lower() not in (".mp4", ".wav")
+        or src_path.suffix.lower() not in (".mp3", ".wav")
         or not src_path.exists()
     ):
         raise HTTPException(404, "Unknown audio file")
 
-    if src_path.suffix.lower() == ".mp4":
-        mp4_path = src_path
+    if src_path.suffix.lower() == ".mp3":
+        mp3_path = src_path
     else:
-        mp4_path = src_path.with_suffix(".mp4")
-        if not mp4_path.exists():
+        mp3_path = src_path.with_suffix(".mp3")
+        if not mp3_path.exists():
             try:
-                wav_to_mp4(str(src_path), str(mp4_path))
+                wav_to_mp3(str(src_path), str(mp3_path))
             except Exception as e:
-                mp4_path.unlink(missing_ok=True)
-                logger.exception("Failed to convert %s to mp4", src_path)
-                raise HTTPException(500, f"Could not convert audio to mp4: {e}")
+                mp3_path.unlink(missing_ok=True)
+                logger.exception("Failed to convert %s to mp3", src_path)
+                raise HTTPException(500, f"Could not convert audio to mp3: {e}")
 
     return FileResponse(
-        str(mp4_path), media_type="audio/mp4", filename=f"{_safe_filename(name)}.mp4",
+        str(mp3_path), media_type="audio/mpeg", filename=f"{_safe_filename(name)}.mp3",
     )
 
 
@@ -783,7 +783,7 @@ def delete_history_entry(entry_id: str, user_id: str = Depends(get_current_user)
     if audio_url.startswith("/audio/"):
         wav_path = GEN_DIR / audio_url.removeprefix("/audio/")
         wav_path.unlink(missing_ok=True)
-        wav_path.with_suffix(".mp4").unlink(missing_ok=True)
+        wav_path.with_suffix(".mp3").unlink(missing_ok=True)
     return {"ok": True}
 
 

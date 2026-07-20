@@ -55,21 +55,21 @@ export default function WaveRibbon({ peaks, audioRef, playing, durationS, label 
         const h = Math.max(2, peaks[i] * (H - 8))
 
         if (style === 'played') {
-          ctx.shadowColor = 'rgba(240, 168, 61, 0.5)'
+          ctx.shadowColor = 'rgba(59, 130, 246, 0.5)'
           ctx.shadowBlur = 8
         } else {
           ctx.shadowBlur = 0
         }
 
         // Pass 1: extrusion underside, offset down.
-        ctx.fillStyle = style === 'played' ? 'rgba(122, 82, 24, 0.8)' : 'rgba(0, 0, 0, 0.45)'
+        ctx.fillStyle = style === 'played' ? 'rgba(30, 58, 138, 0.8)' : 'rgba(0, 0, 0, 0.45)'
         ctx.fillRect(x, mid - h / 2 + 2, barW, h)
 
         // Pass 2: body with vertical light->dark gradient.
         const grad = ctx.createLinearGradient(0, mid - h / 2, 0, mid + h / 2)
         if (style === 'played') {
-          grad.addColorStop(0, 'rgba(247, 197, 118, 0.95)')
-          grad.addColorStop(1, 'rgba(199, 127, 42, 0.85)')
+          grad.addColorStop(0, 'rgba(147, 197, 253, 0.95)')
+          grad.addColorStop(1, 'rgba(37, 99, 235, 0.85)')
         } else {
           grad.addColorStop(0, 'rgba(180, 182, 188, 0.55)')
           grad.addColorStop(1, 'rgba(92, 95, 102, 0.4)')
@@ -79,7 +79,7 @@ export default function WaveRibbon({ peaks, audioRef, playing, durationS, label 
 
         // Pass 3: top-edge highlight.
         ctx.shadowBlur = 0
-        ctx.fillStyle = style === 'played' ? 'rgba(255, 235, 200, 0.5)' : 'rgba(255, 255, 255, 0.25)'
+        ctx.fillStyle = style === 'played' ? 'rgba(219, 234, 254, 0.5)' : 'rgba(255, 255, 255, 0.25)'
         ctx.fillRect(x, mid - h / 2, barW, 1)
       }
       ctx.restore()
@@ -88,7 +88,7 @@ export default function WaveRibbon({ peaks, audioRef, playing, durationS, label 
     drawEnvelope(0, 1, 'base')
     if (progress > 0) {
       drawEnvelope(0, progress, 'played')
-      ctx.fillStyle = 'rgba(240, 168, 61, 0.95)'
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.95)'
       ctx.fillRect(progress * W - 1, 2, 2, H - 4)
     }
   }, [peaks, audioRef, durationS])

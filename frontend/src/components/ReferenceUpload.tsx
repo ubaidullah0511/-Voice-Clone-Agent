@@ -3,10 +3,6 @@ import { UploadIcon } from './Icons'
 interface Props {
   name: string
   onNameChange: (value: string) => void
-  refText: string
-  onRefTextChange: (value: string) => void
-  tag: string
-  onTagChange: (value: string) => void
   fileName: string | null
   onFileSelected: (file: File | null) => void
   creating: boolean
@@ -16,10 +12,6 @@ interface Props {
 export default function ReferenceUpload({
   name,
   onNameChange,
-  refText,
-  onRefTextChange,
-  tag,
-  onTagChange,
   fileName,
   onFileSelected,
   creating,
@@ -62,19 +54,7 @@ export default function ReferenceUpload({
           </button>
         )}
       </label>
-  
-      <textarea
-        placeholder="Exact transcript of the reference audio (leave blank to auto-transcribe)"
-        value={refText}
-        onChange={(e) => onRefTextChange(e.target.value)}
-        rows={2}
-      />
-      <input
-        type="text"
-        placeholder={'Mood/style tag (e.g. "Cinematic", optional)'}
-        value={tag}
-        onChange={(e) => onTagChange(e.target.value)}
-      />
+      <p className="empty-hint">Up to ~60 seconds of clear audio works best.</p>
       <button
         type="button"
         className="primary-btn"

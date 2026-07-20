@@ -29,7 +29,6 @@ used it for a while.
 
 | Var | Value | Notes |
 |---|---|---|
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_...`) | Public — gets inlined into the client bundle by Vite. Same key as `frontend/.env.local`. |
 | `VITE_BACKEND_URL` | `https://<RUNPOD_POD_ID>-8000.proxy.runpod.net` | Used two ways: inlined into the client bundle at build time (so `api.ts` calls the backend directly), **and** read server-side by `api/wake.ts` (`process.env.VITE_BACKEND_URL`) to know which health endpoint to poll. Must match the port the backend actually listens on. |
 | `RUNPOD_API_KEY` | Your RunPod API key | **Server-side only** — read by `api/wake.ts` via `process.env`, never referenced by any client-bundle code. Do not prefix with `VITE_` or Vite will ship it to the browser. |
 | `RUNPOD_POD_ID` | Your pod's ID | Same server-side-only rule as above. |
@@ -43,8 +42,6 @@ rewrite (`/* -> /index.html`) so client-side routing works.
 
 | Var | Value | Notes |
 |---|---|---|
-| `CLERK_SECRET_KEY` | Clerk secret key | Already set. |
-| `CLERK_JWKS_URL` | Clerk JWKS URL | Already set. |
 | `MODEL_PATH` | Local model snapshot path on the pod | Already set. |
 | `ALLOWED_ORIGINS` | `https://<your-vercel-domain>,https://<pod-id>-8000.proxy.runpod.net,http://localhost:5173` | **Currently a placeholder** (`your-app.vercel.app`) — replace with your real production Vercel domain once deployed. Comma-separated, no spaces. This is CORS-enforcing again now that frontend/backend are cross-origin — see "CORS" below. |
 | `RUNPOD_API_KEY` | Your RunPod API key | **Currently blank.** Same key as the Vercel one above, used here by `_stop_runpod_pod()` for self-stop. |

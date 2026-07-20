@@ -1,28 +1,52 @@
 /* Mastering Suite design tokens — the studio's single source of truth.
    The legacy teal/periwinkle block at the top of App.css remains only for
-   LandingPage.css; studio styles must use these. */
-:root {
-  --bg-base: #101113;
-  --bg-panel: rgba(30, 32, 35, 0.6); /* glass — always pairs with blur */
-  --bg-panel-solid: #1e2023; /* nested surfaces — NO backdrop-filter */
-  --bg-inset: rgba(16, 17, 19, 0.55); /* inputs, wells */
-  --text-primary: #edeae2;
-  --text-muted: #8b8d91;
-  --accent-amber: #f0a83d;
-  --accent-amber-soft: rgba(240, 168, 61, 0.16);
-  --accent-red: #e0564a; /* recording/error/destructive only */
-  --accent-red-soft: rgba(224, 86, 74, 0.16);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --panel-border-strong: rgba(255, 255, 255, 0.16);
-  --blur-panel: 20px;
+   LandingPage.css; studio styles must use these.
 
-  --radius-sm: 8px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
+   Palette: Runtime Gurus brand theme. The bg, blue, text, amber, green and
+   danger variables below are the canonical brand variables; every other
+   variable in this file is an alias onto them so the rest of the
+   stylesheet (written against these semantic names) re-themes for free. */
+:root {
+  /* Brand tokens */
+  --bg-deepest: #060b1a; /* darkest bg, footer, stats bar */
+  --bg-nav: #080d1f; /* navbar */
+  --bg-base: #0a1228; /* main page background */
+  --bg-hero: #0d1535; /* hero / card mid-tone */
+  --bg-card: #0d1535; /* panel / card background */
+
+  --blue-primary: #2563eb; /* CTA buttons */
+  --blue-accent: #3b82f6; /* heading accent, active states */
+  --blue-dark: #1e3a8a; /* borders, badge outlines */
+  --blue-light: #93c5fd; /* badge text, pill labels */
+
+  --text-primary: #ffffff;
+  --text-muted: #94a3b8;
+
+  --amber: #f59e0b; /* ratings */
+  --green: #22c55e; /* success / guarantee */
+  --danger: #ef4444; /* delete / error */
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Studio aliases -- existing rules are written against these */
+  --bg-panel: var(--bg-card); /* opaque now; blur stays harmless on solid bg */
+  --bg-panel-solid: var(--bg-card);
+  --bg-inset: var(--bg-nav); /* inputs, wells */
+  --accent-amber: var(--blue-accent);
+  --accent-amber-soft: rgba(37, 99, 235, 0.08);
+  --accent-red: var(--danger);
+  --accent-red-soft: rgba(239, 68, 68, 0.16);
+  --accent-green: var(--green);
+  --accent-green-soft: rgba(34, 197, 94, 0.16);
+  --panel-border: var(--blue-dark);
+  --panel-border-strong: var(--blue-dark);
+  --blur-panel: 20px;
 
   --shadow-float: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 12px 32px rgba(0, 0, 0, 0.55);
   --shadow-press: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 3px 10px rgba(0, 0, 0, 0.5);
-  --glow-amber: 0 0 0 1px rgba(240, 168, 61, 0.35), 0 8px 28px rgba(240, 168, 61, 0.25);
+  --glow-amber: 0 0 0 1px var(--blue-dark), 0 8px 28px rgba(37, 99, 235, 0.25);
 
   --font-display: 'Archivo Variable', 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -30,7 +54,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-amber);
+  outline: 2px solid var(--blue-accent);
   outline-offset: 2px;
 }
 

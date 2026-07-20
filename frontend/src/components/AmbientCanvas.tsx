@@ -23,8 +23,8 @@ function Orb() {
     () => ({
       uTime: { value: 0 },
       uLevel: { value: 0 },
-      uColor: { value: new THREE.Color('#F0A83D') },
-      uDeep: { value: new THREE.Color('#17181b') },
+      uColor: { value: new THREE.Color('#3B82F6') },
+      uDeep: { value: new THREE.Color('#0D1535') },
     }),
     [],
   )

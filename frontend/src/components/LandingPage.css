@@ -19,7 +19,7 @@
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: rgba(11, 9, 9, 0.92);
+  background: rgba(8, 13, 31, 0.92);
   backdrop-filter: blur(6px);
   z-index: 100;
 }
@@ -57,7 +57,7 @@
 }
 
 .landing-nav a:hover {
-  color: var(--accent-secondary);
+  color: var(--text);
 }
 
 .landing-hero {
@@ -106,33 +106,35 @@
 }
 
 .landing-btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: var(--bg-primary);
+  background: var(--accent-primary);
+  color: #fff;
   box-shadow: var(--glow-accent);
 }
 
 .landing-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 32px rgba(64, 129, 117, 0.45);
+  background: var(--accent-secondary);
+  box-shadow: 0 10px 32px rgba(37, 99, 235, 0.45);
 }
 
 .landing-btn-secondary {
   background: transparent;
-  color: var(--accent-secondary);
-  border: 1px solid var(--accent-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .landing-btn-secondary:hover {
+  border-color: var(--accent-secondary);
   background: var(--accent-secondary-soft);
 }
 
 .landing-hero-badge {
   display: inline-block;
   background: var(--accent-secondary-soft);
-  border: 1px solid var(--accent-secondary);
-  color: var(--accent-secondary);
+  border: 1px solid var(--border);
+  color: var(--blue-light);
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 20px;
@@ -170,9 +172,9 @@
 }
 
 .landing-card:hover {
-  border-color: var(--accent-primary);
+  border-color: var(--accent-secondary);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--blue-accent);
 }
 
 .landing-card-icon {
@@ -214,7 +216,7 @@
   width: 40px;
   height: 40px;
   background: var(--accent-primary);
-  color: var(--bg-primary);
+  color: #fff;
   border-radius: 50%;
   font-weight: 700;
   margin-bottom: 16px;
@@ -265,6 +267,7 @@
 .landing-footer {
   padding: 40px 0;
   border-top: 1px solid var(--border);
+  background: var(--bg-deepest);
   text-align: center;
   color: var(--text-muted);
   font-size: 14px;

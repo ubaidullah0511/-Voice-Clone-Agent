@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { cancelQueuedJob, downloadUrl, mediaUrl, reorderQueue } from '../api'
 import { useGenerationActivity } from '../GenerationActivityContext'
 import { downloadName, formatDuration } from '../format'
+import { usePersistedRecord } from '../hooks/usePersistedRecord'
 import ClipPlayer from './ClipPlayer'
-import { TrashIcon } from './Icons'
+import { PencilIcon, TrashIcon } from './Icons'
 
 const STATUS_LABELS: Record<string, string> = {
   queued: 'Queued',
@@ -17,6 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
  * above the Generations list. */
 export default function QueuePanel() {
   const { queue, refresh } = useGenerationActivity()
+  const [entryFileNames, setFileName] = usePersistedRecord('queueFileNames')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
 
   async function handleCancel(jobId: string) {
     try {
@@ -61,21 +65,55 @@ export default function QueuePanel() {
             <li key={entry.job_id} className="queue-row">
               <div className="queue-row-top">
                 <div className="queue-row-title">
-                  <strong>{entry.preset_name}</strong>
+                  <strong>{entryFileNames[entry.job_id]?.trim() || entry.preset_name}</strong>
                   <span className={`badge-pill queue-status-${entry.status}`}>
                     {STATUS_LABELS[entry.status] ?? entry.status}
                   </span>
                 </div>
-                <span className="list-meta mono">
-                  {entry.status === 'queued' &&
-                    entry.eta_s != null &&
-                    `~${formatDuration(entry.eta_s)} until start`}
-                  {entry.status === 'running' &&
-                    `${entry.chunks_done}/${entry.total_chunks} chunks -- ~${formatDuration(entry.eta_s)} left`}
-                  {entry.status === 'done' && `done in ${formatDuration(entry.elapsed_s)}`}
-                  {entry.status === 'error' && 'failed'}
-                  {entry.status === 'canceled' && 'canceled'}
-                </span>
+                <div className="row-top-right">
+                  <span className="list-meta mono">
+                    {entry.status === 'queued' &&
+                      entry.eta_s != null &&
+                      `~${formatDuration(entry.eta_s)} until start`}
+                    {entry.status === 'running' &&
+                      `${entry.chunks_done}/${entry.total_chunks} chunks -- ~${formatDuration(entry.eta_s)} left`}
+                    {entry.status === 'done' && `done in ${formatDuration(entry.elapsed_s)}`}
+                    {entry.status === 'error' && 'failed'}
+                    {entry.status === 'canceled' && 'canceled'}
+                  </span>
+                  {entry.audio_url && (
+                    <div className="rename-group">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label="Rename download"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setRenamingId((prev) => (prev === entry.job_id ? null : entry.job_id))
+                        }}
+                      >
+                        <PencilIcon size={14} />
+                      </button>
+                      {renamingId === entry.job_id && (
+                        <input
+                          type="text"
+                          autoFocus
+                          className="rename-input"
+                          placeholder="File name (leave blank to auto-name)"
+                          value={entryFileNames[entry.job_id] ?? ''}
+                          onChange={(e) => setFileName(entry.job_id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onBlur={() => setRenamingId(null)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation()
+                            if (e.key === 'Enter' || e.key === 'Escape') setRenamingId(null)
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="queue-text">{entry.text_preview}</p>
               {entry.error && <p className="error">{entry.error}</p>}
@@ -88,7 +126,10 @@ export default function QueuePanel() {
                     label={`${entry.preset_name} clip`}
                   />
                   <a
-                    href={downloadUrl(entry.audio_url, downloadName(entry.preset_name, entry.submitted_at))}
+                    href={downloadUrl(
+                      entry.audio_url,
+                      entryFileNames[entry.job_id]?.trim() || downloadName(entry.preset_name, entry.submitted_at),
+                    )}
                     download
                     className="download-link"
                   >

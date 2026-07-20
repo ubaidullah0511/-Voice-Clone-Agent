@@ -120,18 +120,11 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-/** window.Clerk is set by <ClerkProvider> (typed globally by @clerk/react) --
- * reading the session token this way keeps auth out of every call site below,
- * without needing a React hook in a plain module. */
+// No external auth service -- the backend treats every request as the same
+// local user, so this is just a plain fetch kept as a named wrapper to avoid
+// touching every call site below.
 async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
-  const token = await window.Clerk?.session?.getToken()
-  return fetch(url, {
-    ...opts,
-    headers: {
-      ...(opts.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
+  return fetch(url, opts)
 }
 
 export function getHealth(): Promise<HealthResponse> {
@@ -186,8 +179,6 @@ export interface GenerateParams {
   presetId: string
   text: string
   language: string
-  style: string
-  stability: string
 }
 
 export function startGenerate(params: GenerateParams): Promise<GenerateJobStart> {
@@ -198,8 +189,6 @@ export function startGenerate(params: GenerateParams): Promise<GenerateJobStart>
       preset_id: params.presetId,
       text: params.text,
       language: params.language,
-      style: params.style,
-      stability: params.stability,
     }),
   }).then(parseOrThrow<GenerateJobStart>)
 }
@@ -212,8 +201,8 @@ export function getEstimate(chars: number): Promise<{ estimated_s: number }> {
   return fetch(apiUrl(`/api/estimate?chars=${chars}`)).then(parseOrThrow<{ estimated_s: number }>)
 }
 
-/** Downloads always come back as a renamed .mp4 (converted server-side from
- * the stored .wav, or served as-is if already .mp4) -- playback elsewhere in
+/** Downloads always come back as a renamed .mp3 (converted server-side from
+ * the stored .wav, or served as-is if already .mp3) -- playback elsewhere in
  * the app still uses the raw audio_url directly (via mediaUrl()). */
 export function downloadUrl(audioUrl: string, name: string): string {
   const filename = audioUrl.split('/').pop() ?? ''

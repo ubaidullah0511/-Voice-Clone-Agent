@@ -15,15 +15,15 @@ interface Props {
   onDelete: (id: string) => void
 }
 
-// Amber/bronze/warm-graphite family derived from the studio palette --
-// warm console tones, never recording-red.
+// Blue family derived from the Runtime Gurus palette -- brand tones,
+// never recording-red.
 const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #f0a83d, #c77f2a)',
-  'linear-gradient(135deg, #c77f2a, #5a4a33)',
-  'linear-gradient(135deg, #8b8d91, #4a4d52)',
-  'linear-gradient(135deg, #e0b878, #96702f)',
-  'linear-gradient(135deg, #5a4a33, #2c2620)',
-  'linear-gradient(135deg, #b9955c, #6e5636)',
+  'linear-gradient(135deg, #3b82f6, #1e3a8a)',
+  'linear-gradient(135deg, #2563eb, #1e3a8a)',
+  'linear-gradient(135deg, #94a3b8, #475569)',
+  'linear-gradient(135deg, #93c5fd, #2563eb)',
+  'linear-gradient(135deg, #1e3a8a, #0d1535)',
+  'linear-gradient(135deg, #60a5fa, #1d4ed8)',
 ]
 
 function avatarGradient(seed: string): string {
@@ -64,7 +64,7 @@ function MiniMeter() {
       for (let i = 0; i < bars; i++) {
         const amp = reducedMotion ? 0.55 : 0.3 + 0.65 * Math.abs(Math.sin(f * 0.12 + i * 0.9))
         const barH = Math.max(2, amp * h)
-        ctx!.fillStyle = 'rgba(240, 168, 61, 0.9)'
+        ctx!.fillStyle = 'rgba(59, 130, 246, 0.9)'
         ctx!.fillRect(i * 5, (h - barH) / 2, 3, barH)
       }
     }
