@@ -43,7 +43,7 @@ export function GenerationActivityProvider({ children }: { children: ReactNode }
         .finally(() => {
           if (cancelled) return
           const active = queueRef.current.some(
-            (e) => e.status === 'running' || e.status === 'queued',
+            (e) => e.status === 'running' || e.status === 'canceling' || e.status === 'queued',
           )
           timer = window.setTimeout(tick, active ? 1000 : 4000)
         })

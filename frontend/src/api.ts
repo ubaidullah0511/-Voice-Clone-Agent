@@ -41,7 +41,7 @@ export interface GenerateJobStart {
   queue_position: number
 }
 
-export type JobStatusValue = 'queued' | 'running' | 'done' | 'error' | 'canceled'
+export type JobStatusValue = 'queued' | 'running' | 'canceling' | 'done' | 'error' | 'canceled'
 
 export interface JobStatus {
   status: JobStatusValue
@@ -215,6 +215,12 @@ export function listQueue(): Promise<{ queue: QueueEntry[] }> {
 
 export function cancelQueuedJob(jobId: string): Promise<{ ok: boolean }> {
   return authFetch(apiUrl(`/api/queue/${jobId}/cancel`), { method: 'POST' }).then(
+    parseOrThrow<{ ok: boolean }>,
+  )
+}
+
+export function deleteQueueJob(jobId: string): Promise<{ ok: boolean }> {
+  return authFetch(apiUrl(`/api/queue/${jobId}`), { method: 'DELETE' }).then(
     parseOrThrow<{ ok: boolean }>,
   )
 }

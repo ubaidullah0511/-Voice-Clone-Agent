@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { cancelQueuedJob, downloadUrl, mediaUrl, reorderQueue } from '../api'
+import { createPortal } from 'react-dom'
+import { cancelQueuedJob, deleteQueueJob, downloadUrl, mediaUrl, reorderQueue } from '../api'
 import { useGenerationActivity } from '../GenerationActivityContext'
 import { downloadName, formatDuration } from '../format'
 import { usePersistedRecord } from '../hooks/usePersistedRecord'
@@ -9,6 +10,7 @@ import { PencilIcon, TrashIcon } from './Icons'
 const STATUS_LABELS: Record<string, string> = {
   queued: 'Queued',
   running: 'Processing',
+  canceling: 'Canceling...',
   done: 'Done',
   error: 'Failed',
   canceled: 'Canceled',
@@ -21,10 +23,19 @@ export default function QueuePanel() {
   const { queue, refresh } = useGenerationActivity()
   const [entryFileNames, setFileName] = usePersistedRecord('queueFileNames')
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
 
   async function handleCancel(jobId: string) {
     try {
       await cancelQueuedJob(jobId)
+    } finally {
+      refresh()
+    }
+  }
+
+  async function handleDelete(jobId: string) {
+    try {
+      await deleteQueueJob(jobId)
     } finally {
       refresh()
     }
@@ -77,6 +88,8 @@ export default function QueuePanel() {
                       `~${formatDuration(entry.eta_s)} until start`}
                     {entry.status === 'running' &&
                       `${entry.chunks_done}/${entry.total_chunks} chunks -- ~${formatDuration(entry.eta_s)} left`}
+                    {entry.status === 'canceling' &&
+                      `stopping after chunk ${entry.chunks_done}/${entry.total_chunks}...`}
                     {entry.status === 'done' && `done in ${formatDuration(entry.elapsed_s)}`}
                     {entry.status === 'error' && 'failed'}
                     {entry.status === 'canceled' && 'canceled'}
@@ -167,10 +180,59 @@ export default function QueuePanel() {
                   </button>
                 </div>
               )}
+              {entry.status === 'running' && (
+                <div className="queue-row-actions">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    aria-label="Cancel generation"
+                    onClick={() => setConfirmingCancelId(entry.job_id)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              )}
+              {(entry.status === 'canceled' || entry.status === 'error') && (
+                <div className="queue-row-actions">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    aria-label="Delete job"
+                    onClick={() => handleDelete(entry.job_id)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              )}
             </li>
           )
         })}
       </ul>
+
+      {/* Confirmation for canceling an in-progress generation -- unlike a
+          queued job, this loses whatever chunk work is currently running. */}
+      {confirmingCancelId && createPortal(
+        <div className="modal-backdrop" onClick={() => setConfirmingCancelId(null)}>
+          <div className="panel modal-confirm" onClick={(e) => e.stopPropagation()}>
+            <p>Cancel this generation? Progress on the current chunk will be lost.</p>
+            <div className="modal-actions">
+              <button className="modal-btn-cancel" onClick={() => setConfirmingCancelId(null)}>
+                Keep going
+              </button>
+              <button
+                className="modal-btn-delete"
+                onClick={() => {
+                  handleCancel(confirmingCancelId)
+                  setConfirmingCancelId(null)
+                }}
+              >
+                Cancel generation
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </section>
   )
 }

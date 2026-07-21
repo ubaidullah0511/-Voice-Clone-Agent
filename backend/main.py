@@ -245,7 +245,11 @@ def _job_eta_seconds_locked(job_id: str) -> Optional[float]:
     total = job["total_chunks"] or 1
     done = job["chunks_done"]
 
-    if status == "running":
+    if status in ("running", "canceling"):
+        # "canceling" still counts as running here -- it's mid-chunk until the
+        # worker's next chunk-boundary check honors it (see _process_job), and
+        # treating it as queued below would recurse into itself via
+        # _current_running_job_id (this same job_id).
         elapsed = _job_elapsed_seconds_locked(job_id) or 0.0
         per_chunk = (elapsed / done) if done > 0 else (job["estimated_s"] / total)
         return max(per_chunk * (total - done), 0.0)
@@ -382,6 +386,20 @@ def _process_job(job_id: str) -> None:
     sr: Optional[int] = None
 
     for i, chunk in enumerate(chunks):
+        with _jobs_lock:
+            canceled = job["status"] == "canceling"
+            if canceled:
+                job.update(status="canceled", finished_at=time.time())
+                _current_running_job_id = None
+                _persist_queue_locked()
+        if canceled:
+            # ponytail: cancellation only takes effect at a chunk boundary --
+            # an in-flight GPU call can't be interrupted, so a single-chunk
+            # job still runs to completion once started. Upgrade path: only
+            # possible if qwen_tts grows a real interrupt/streaming-cancel API.
+            credits.release_reservation(job["user_id"])
+            return
+
         last_error: Optional[Exception] = None
         audio_arrays = None
         for attempt in range(2):  # one retry per chunk before giving up
@@ -948,6 +966,11 @@ def list_queue(user_id: str = Depends(get_current_user)) -> dict:
             for job_id, job in _jobs.items()
             if job.get("user_id") == user_id
         ]
+        # _jobs dict order is submission order, not processing order -- sort
+        # queued entries by their real position in _pending_job_ids so the
+        # list actually reflects /api/queue/reorder (non-queued entries keep
+        # their relative order via the stable sort's shared key).
+        entries.sort(key=lambda e: e.queue_position if e.queue_position is not None else -1)
     return {"queue": entries}
 
 
@@ -956,14 +979,38 @@ def cancel_queued_job(job_id: str, user_id: str = Depends(get_current_user)):
     with _jobs_lock:
         if job_id not in _jobs or _jobs[job_id].get("user_id") != user_id:
             raise HTTPException(404, "Unknown job_id")
-        if job_id not in _pending_job_ids:
+        job = _jobs[job_id]
+        if job_id in _pending_job_ids:
+            _pending_job_ids.remove(job_id)
+            job.update(status="canceled", finished_at=time.time())
+            _persist_queue_locked()
+            release_now = True
+        elif job_id == _current_running_job_id and job["status"] == "running":
+            # Not canceled yet -- _process_job's chunk loop notices this and
+            # finishes the cancellation (see the "canceling" check there).
+            job["status"] = "canceling"
+            release_now = False
+        else:
             raise HTTPException(
-                400, "Only queued (not yet started) jobs can be canceled.",
+                400, "Only a queued or currently-processing job can be canceled.",
             )
-        _pending_job_ids.remove(job_id)
-        _jobs[job_id].update(status="canceled", finished_at=time.time())
-        _persist_queue_locked()
-    credits.release_reservation(user_id)
+    if release_now:
+        credits.release_reservation(user_id)
+    return {"ok": True}
+
+
+@app.delete("/api/queue/{job_id}")
+def delete_job(job_id: str, user_id: str = Depends(get_current_user)):
+    """Removes a dead job (canceled/error) from the in-memory queue list --
+    "done" jobs already have their own delete via /api/history, so aren't
+    handled here to avoid double-managing the same audio file."""
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job is None or job.get("user_id") != user_id:
+            raise HTTPException(404, "Unknown job_id")
+        if job["status"] not in ("canceled", "error"):
+            raise HTTPException(400, "Only a canceled or failed job can be deleted.")
+        del _jobs[job_id]
     return {"ok": True}
 
 

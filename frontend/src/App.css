@@ -1177,6 +1177,12 @@ button {
   background: var(--bg-inset);
 }
 
+.queue-status-canceling {
+  color: var(--accent-red);
+  background: var(--accent-red-soft);
+  border-color: transparent;
+}
+
 /* Script blocks */
 .script-blocks {
   display: flex;
