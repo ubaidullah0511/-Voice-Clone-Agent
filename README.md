@@ -7,16 +7,17 @@ play/download — **without** accounts, credits, or billing, which remain intent
 this local MVP.
 
 ```
-webapp/
-  qwen/       Vendored FasterQwen3TTS package (CUDA-graph-accelerated Qwen3-TTS wrapper) --
-              see qwen/README.md and qwen/HOW_TO_RUN.md
-  backend/
-    main.py             FastAPI app: loads FasterQwen3TTS once, serves the REST API, runs
-                        generation jobs in a background thread
-    text_chunker.py     Splits a script into TTS-safe chunks (sentence boundaries first,
-                        clause/word-boundary fallback for oversized sentences)
-    audio_stitcher.py   Concatenates per-chunk audio with a silence gap between chunks
-  frontend/   React + Vite + TypeScript dashboard
+qwen/       Vendored FasterQwen3TTS package (CUDA-graph-accelerated Qwen3-TTS wrapper) --
+            see qwen/README.md and qwen/HOW_TO_RUN.md
+backend/
+  main.py             FastAPI app: loads FasterQwen3TTS once, serves the REST API, runs
+                      generation jobs in a background thread
+  text_chunker.py     Splits a script into TTS-safe chunks (sentence boundaries first,
+                      clause/word-boundary fallback for oversized sentences)
+  audio_stitcher.py   Concatenates per-chunk audio with a silence gap between chunks
+frontend/   React + Vite + TypeScript dashboard
+start_server.bat          One-click launcher for the always-on LAN server mode (see Run below)
+start_server_silent.vbs   Same, with no console window -- for auto-start-at-login setups
 ```
 
 ## Prerequisites
@@ -27,35 +28,65 @@ model snapshot. This app reuses those exact same settings (`dtype=bfloat16`, `at
 
 Also needed:
 ```bash
-pip install fastapi "uvicorn[standard]" python-multipart
+pip install -r backend/requirements.txt
 ```
 ```bash
-cd webapp/frontend
+cd frontend
 npm install
 ```
 
 ## Configure
 
-Edit `backend/main.py` and set `MODEL_PATH` to your local model snapshot path (the same one from
-`HOW_TO_RUN.md` step 3).
+Copy `backend/.env.example` to `backend/.env` and set `MODEL_PATH` to your local model snapshot path
+(the same one from `HOW_TO_RUN.md` step 3).
 
 ## Run
 
-Two terminals:
+**Local development** (hot reload, two terminals):
 
 ```bash
 # Terminal 1 -- backend (loads the model; first startup takes a few seconds)
-cd webapp/backend
+cd backend
 python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 ```bash
 # Terminal 2 -- frontend (proxies /api and /audio to the backend, see vite.config.ts)
-cd webapp/frontend
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
+cd frontend
+npm run dev
 ```
 
 Open **http://localhost:5173**.
+
+**Always-on server** (single process/port, reachable from other devices on the network):
+
+```bash
+cd frontend && npm run build   # one-time, and again after any frontend change
+```
+
+Then run `start_server.bat` (already at the repo root, no need to create it yourself), which starts
+`python -m uvicorn main:app --host 0.0.0.0 --port 8000` from `backend/`. This builds one process that
+serves both the API and the built frontend from the same port, so it's reachable at
+`http://<this-machine's-LAN-IP>:8000` (find that IP with `ipconfig`) from any device on the network —
+no separate frontend server, no CORS to configure.
+
+*Running it:*
+- **Manually**: double-click `start_server.bat` in File Explorer, or run it from a terminal
+  (`.\start_server.bat`). The console window stays open showing server logs — closing it stops the server.
+- **Desktop shortcut**: right-click `start_server.bat` → *Show more options* → *Send to* →
+  *Desktop (create shortcut)*. Rename it and, optionally, right-click → *Properties* → *Change Icon*
+  to give it its own icon. Double-clicking that shortcut is then equivalent to running the `.bat` directly.
+- **Auto-start at login** (no manual click needed): use `start_server_silent.vbs` instead, which runs the
+  same `.bat` with no visible console window — point a Windows Task Scheduler task at it with an
+  "At log on" trigger, e.g. (run as Administrator, adjust the path to match where you cloned this repo):
+  ```powershell
+  schtasks /create /tn "VoiceCloneStudio" /tr "wscript.exe \"C:\path\to\repo\start_server_silent.vbs\"" /sc onlogon /rl highest /f
+  ```
+- **Allowing other devices to connect**: Windows Firewall blocks inbound connections by default, so LAN
+  devices can't reach it until you allow the port once (run as Administrator):
+  ```powershell
+  New-NetFirewallRule -DisplayName "Voice Clone Studio" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+  ```
 
 ## Using it
 
@@ -127,10 +158,10 @@ the Generate button.
 - **In-memory job state.** `_jobs` (job status/progress) lives in the backend process's memory, not on
   disk — restarting the backend mid-job loses that job's progress (though already-completed jobs' History
   entries are unaffected, since those are persisted separately).
-- **Non-streaming only.** Each chunk calls `generate_voice_clone`, not the streaming variant, so a chunk's
-  audio only appears once that whole chunk finishes. `generate_voice_clone_streaming` (in
-  `qwen/streaming.py`) is already implemented and working — wiring it up (e.g. streaming finished chunks
-  to the client as they land, instead of only at job completion) is a natural next step, just deferred.
+- **Streaming used for cancellation, not delivery.** Each chunk now calls `generate_voice_clone_streaming`
+  (`qwen/streaming.py`) internally so a canceled job stops within about a second instead of waiting for
+  the whole chunk, but the client still only receives audio once a chunk (and the whole job) finishes --
+  streaming finished audio to the client as it's generated is a natural next step, just deferred.
 - **No pagination/search.** Preset and history lists render in full — fine at local, single-user scale.
 
 ## Verified
