@@ -393,19 +393,20 @@ def _process_job(job_id: str) -> None:
                 _current_running_job_id = None
                 _persist_queue_locked()
         if canceled:
-            # ponytail: cancellation only takes effect at a chunk boundary --
-            # an in-flight GPU call can't be interrupted, so a single-chunk
-            # job still runs to completion once started. Upgrade path: only
-            # possible if qwen_tts grows a real interrupt/streaming-cancel API.
             credits.release_reservation(job["user_id"])
             return
 
         last_error: Optional[Exception] = None
         audio_arrays = None
+        canceled_mid_chunk = False
         for attempt in range(2):  # one retry per chunk before giving up
             try:
+                pieces: list[np.ndarray] = []
                 with _gen_lock:
-                    audio_arrays, sr = _tts.generate_voice_clone(
+                    # Streaming (not the blocking generate_voice_clone) so a
+                    # cancel can take effect after ~1s of audio instead of
+                    # waiting for the whole (up to ~85s) chunk to finish.
+                    stream = _tts.generate_voice_clone_streaming(
                         text=chunk,
                         language=language,
                         ref_audio=preset["audio_path"],
@@ -414,6 +415,16 @@ def _process_job(job_id: str) -> None:
                         max_new_tokens=MAX_NEW_TOKENS,
                         **STABILITY_PARAMS[stability],
                     )
+                    for piece, sr, _timing in stream:
+                        pieces.append(piece)
+                        with _jobs_lock:
+                            canceled_mid_chunk = job["status"] == "canceling"
+                        if canceled_mid_chunk:
+                            stream.close()
+                            break
+                if canceled_mid_chunk:
+                    break
+                audio_arrays = [np.concatenate(pieces) if pieces else np.zeros(0, dtype=np.float32)]
                 last_error = None
                 break
             except RuntimeError as e:
@@ -426,6 +437,14 @@ def _process_job(job_id: str) -> None:
                 # would just fail again. Fail fast instead of wasting a retry.
                 if "CUDA error" in str(e):
                     break
+
+        if canceled_mid_chunk:
+            with _jobs_lock:
+                job.update(status="canceled", finished_at=time.time())
+                _current_running_job_id = None
+                _persist_queue_locked()
+            credits.release_reservation(job["user_id"])
+            return
 
         if last_error is not None:
             error_msg = f"Chunk {i + 1}/{len(chunks)} failed: {last_error}"
