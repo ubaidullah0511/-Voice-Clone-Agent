@@ -32,6 +32,7 @@ used it for a while.
 | `VITE_BACKEND_URL` | `https://<RUNPOD_POD_ID>-8000.proxy.runpod.net` | Used two ways: inlined into the client bundle at build time (so `api.ts` calls the backend directly), **and** read server-side by `api/wake.ts` (`process.env.VITE_BACKEND_URL`) to know which health endpoint to poll. Must match the port the backend actually listens on. |
 | `RUNPOD_API_KEY` | Your RunPod API key | **Server-side only** — read by `api/wake.ts` via `process.env`, never referenced by any client-bundle code. Do not prefix with `VITE_` or Vite will ship it to the browser. |
 | `RUNPOD_POD_ID` | Your pod's ID | Same server-side-only rule as above. |
+| `VITE_USE_RUNPOD_WAKE` | `true` | Client-side opt-in for `src/wake.ts` to call the Vercel `/api/wake` proxy instead of hitting the backend's `/api/health` directly. Required here -- without it, the frontend never wakes the RunPod pod. Must be unset (or `false`) for any other build of this frontend (local dev, or the LAN/single-origin build served by `start_server.bat`), which have no `/api/wake` route and would otherwise 404-poll forever. |
 
 Project settings: Root Directory = `frontend`, Framework Preset = Vite, Build
 Command = `tsc -b && vite build` (default from `package.json`), Output

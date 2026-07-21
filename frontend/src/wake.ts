@@ -13,11 +13,16 @@ const POLL_INTERVAL_MS = 3000
 const CLIENT_TIMEOUT_MS = 130_000
 
 async function callWake(startedAt: number): Promise<WakeResponse> {
-  // `/api/wake` is a Vercel Edge Function that only exists on the deployed
-  // site -- in local dev there's no RunPod pod to wake, and the Vite dev
-  // server would just serve index.html for that path (never erroring, never
-  // resolving), so go straight to the local backend's own health check.
-  if (import.meta.env.DEV) {
+  // `/api/wake` is a Vercel Edge Function that only exists when this frontend
+  // is actually served by Vercel in front of a RunPod pod that needs waking.
+  // `import.meta.env.DEV` used to gate this, but that's true only in `vite
+  // dev` -- any other production build (including this app's own LAN/single-
+  // origin build served directly by the FastAPI backend, via start_server.bat)
+  // is DEV=false too, and has no /api/wake route, which just 404s forever.
+  // VITE_USE_RUNPOD_WAKE is the explicit opt-in, set only in the Vercel
+  // project's env (see DEPLOYMENT.md) -- everywhere else, go straight to the
+  // backend's own health check.
+  if (!import.meta.env.VITE_USE_RUNPOD_WAKE) {
     try {
       const health = await getHealth()
       return { status: health.model_loaded ? 'ready' : 'starting' }
