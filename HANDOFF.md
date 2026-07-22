@@ -14,8 +14,8 @@ accounts/billing.
 **Current stage**: working MVP, single-machine deployment. It went through an abandoned multi-tenant SaaS
 detour (Clerk auth + per-user credits + split Vercel/RunPod cloud deployment) that was mostly unwound in
 favor of a single-local-user model, now being set up as an always-on LAN server for ~5 employees on one
-office GPU machine. See §3 and §7 — the credits system from that detour is still live and about to cause
-a real problem.
+office GPU machine. The leftover credits/plans system from that detour has since been fully removed
+(see §3, §4).
 
 ## 2. Architecture Overview
 
@@ -66,10 +66,6 @@ project if that path is still in use — not present in this repo's tracked file
 - Single local user, no login friction (Clerk fully removed)
 
 **Partially built / in progress**:
-- **Credits/plans system** (`backend/credits.py`, `backend/config/plans.py`) — still fully wired into
-  every `/api/generate` call (`credits.reserve_credit`), a leftover from the abandoned Clerk/multi-tenant
-  design. Was never disabled when auth was simplified to a single local user. See §7 — this is close to
-  actively breaking things.
 - **RunPod+Vercel split-deployment path** (`DEPLOYMENT.md`, `frontend/api/wake.ts`, idle-auto-stop loop in
   `main.py`) — built and documented, but not the currently-active deployment target.
 - **Streaming to the client** — chunk generation now uses the streaming API internally (added this session,
@@ -86,13 +82,9 @@ project if that path is still in use — not present in this repo's tracked file
    call *their own* `127.0.0.1:8000` instead of the GPU server — breaking the app for everyone except
    someone browsing from the GPU machine itself. **Not yet fixed.** Fix: unset/rename `.env.local` (or set
    `VITE_BACKEND_URL=` empty) before running `npm run build` for LAN mode.
-2. **Credits will run out very soon.** `backend/storage/users.json` currently shows the single local user
-   has `"credits_remaining": 3` on the `"free"` plan (20/month cap, `config/plans.py`). Once it hits 0,
-   `/api/generate` returns HTTP 402 for *everyone* on the LAN, not just one browser — until the rolling
-   30-day reset or a manual fix. Not yet addressed.
-3. `planm.md` (repo root, **untracked**, never committed) is a stale planning note referencing Clerk env
+2. `planm.md` (repo root, **untracked**, never committed) is a stale planning note referencing Clerk env
    vars (`CLERK_SECRET_KEY`, `CLERK_JWKS_URL`) that no longer apply. Harmless, safe to delete.
-4. Two git remotes exist with very different histories: `origin` (this repo, actively maintained) and
+3. Two git remotes exist with very different histories: `origin` (this repo, actively maintained) and
    `localhost-tool` (`voice_over_tool_localhost`), which was force-overwritten in a prior session to match
    `origin`, discarding an unrelated Electron-desktop-app scaffold (`desktop/`, `electron-builder.yml`)
    that lived there. That old state is recoverable only briefly via GitHub's orphaned-commit URL
@@ -170,15 +162,12 @@ Run: see `README.md` "Run" section (dev mode: two terminals, `uvicorn` + `npm ru
 Prioritized:
 1. **Fix or work around the `VITE_BACKEND_URL` build bug (§3 #1)** before building `frontend/dist` for the
    LAN server — otherwise the LAN rollout silently doesn't work for anyone but the GPU machine itself.
-2. **Address the credits cap (§3 #2)** before employees start using it — either bump
-   `users.json`'s local-user plan to `"unlimited"`, change `config/plans.py`'s `DEFAULT_PLAN`, or remove
-   the credits system entirely now that it's a single-deployment tool, not a metered SaaS.
-3. Finish and verify the LAN rollout's system-level steps (router DHCP reservation, Windows Firewall rule,
+2. Finish and verify the LAN rollout's system-level steps (router DHCP reservation, Windows Firewall rule,
    auto-login, Task Scheduler task) — instructions were given, execution/verification status from a real
    second device is unconfirmed. **TODO: verify.**
-4. Decide the open architecture question below (RunPod/Vercel path) so dead code either gets removed or
+3. Decide the open architecture question below (RunPod/Vercel path) so dead code either gets removed or
    properly maintained.
-5. Clean up `planm.md` (stale, untracked) and `DEPLOYMENT.md`'s stale Clerk reference.
+4. Clean up `planm.md` (stale, untracked) and `DEPLOYMENT.md`'s stale Clerk reference.
 
 **Open decisions**:
 - Is the RunPod+Vercel cloud deployment still wanted, or has the project fully pivoted to local/LAN-only?
@@ -186,8 +175,6 @@ Prioritized:
   be kept, simplified, or deleted.
 - Whether to pursue the Electron desktop-app direction (discussed this session, no code exists for it in
   this repo — an earlier attempt existed only in `voice_over_tool_localhost` and was discarded).
-- Whether the credits/plans/multi-user scaffolding (`credits.py`, `config/plans.py`,
-  `migrate_to_multiuser.py`) should be removed now that the product is single-deployment, not multi-tenant.
 
 ## 7. Gotchas & Non-Obvious Context
 
@@ -207,9 +194,8 @@ Prioritized:
   SPA-serving route never registers for that process's lifetime — building the frontend *after* starting
   the backend does nothing until restart.
 - **`auth.py`'s `get_current_user` is a stub, not real auth** — every request is silently treated as the
-  same `"local-user"`, but it still round-trips through `credits.get_or_create_user` every call (kept this
-  way specifically so the credits system "keeps working unchanged" per the code comment) — which is exactly
-  why the stale credits cap (§3 #2) is still live and biting.
+  same `"local-user"`, with no per-user gating of any kind (the credits/plans system that used to sit
+  behind it was removed).
 - **`vite.config.ts` has no dev-server API proxy anymore** — removed when the app moved to
   absolute-URL-only API calls for the split cloud deployment. Local dev now depends entirely on
   `frontend/.env.local`'s `VITE_BACKEND_URL` pointing at wherever the backend actually runs.

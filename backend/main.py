@@ -26,9 +26,7 @@ from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent / ".env")
 
-import credits
 from auth import get_current_user, get_last_activity
-from config.plans import DEFAULT_PLAN, PLANS
 from qwen import FasterQwen3TTS
 from audio_convert import wav_to_mp3, write_mp3
 from audio_stitcher import stitch_audio
@@ -367,7 +365,6 @@ def _process_job(job_id: str) -> None:
             job.update(status="error", error="Preset was deleted before this job could run.")
             _current_running_job_id = None
             _persist_queue_locked()
-        credits.release_reservation(job["user_id"])
         return
     preset = live_preset
 
@@ -393,7 +390,6 @@ def _process_job(job_id: str) -> None:
                 _current_running_job_id = None
                 _persist_queue_locked()
         if canceled:
-            credits.release_reservation(job["user_id"])
             return
 
         last_error: Optional[Exception] = None
@@ -443,7 +439,6 @@ def _process_job(job_id: str) -> None:
                 job.update(status="canceled", finished_at=time.time())
                 _current_running_job_id = None
                 _persist_queue_locked()
-            credits.release_reservation(job["user_id"])
             return
 
         if last_error is not None:
@@ -454,7 +449,6 @@ def _process_job(job_id: str) -> None:
                 job.update(status="error", error=error_msg, finished_at=time.time())
                 _current_running_job_id = None
                 _persist_queue_locked()
-            credits.release_reservation(job["user_id"])
             return
 
         audio_chunks.append(audio_arrays[0])
@@ -499,7 +493,6 @@ def _process_job(job_id: str) -> None:
         job.update(status="done", audio_url=audio_url, sample_rate=sr, finished_at=finished_at)
         _current_running_job_id = None
         _persist_queue_locked()
-    credits.consume_reservation(job["user_id"])
 
 
 def _worker_loop() -> None:
@@ -522,7 +515,6 @@ def _worker_loop() -> None:
                 global _current_running_job_id
                 _current_running_job_id = None
                 _persist_queue_locked()
-            credits.release_reservation(_jobs[job_id]["user_id"])
 
 
 def _stop_runpod_pod() -> bool:
@@ -670,24 +662,6 @@ def estimate(chars: int) -> dict:
     rolling average as job submission -- lets the frontend show a live
     estimate while the user is still typing, without spamming /api/generate."""
     return {"estimated_s": _estimate_seconds(max(chars, 0))}
-
-
-@app.get("/api/account")
-def get_account(user_id: str = Depends(get_current_user)) -> dict:
-    user = credits.get_user(user_id)
-    if user is None:
-        raise HTTPException(404, "User not found")
-    plan = PLANS.get(user["plan"], PLANS[DEFAULT_PLAN])
-    return {
-        "user_id": user["user_id"],
-        "email": user.get("email"),
-        "plan": user["plan"],
-        "unlimited": plan["unlimited"],
-        "credits_remaining": user["credits_remaining"],
-        "credits_reserved": user["credits_reserved"],
-        "credits_total": plan["credits_per_month"],
-        "credits_reset_at": user["credits_reset_at"],
-    }
 
 
 def _preset_response(preset: dict) -> dict:
@@ -930,13 +904,6 @@ def generate(req: GenerateRequest, user_id: str = Depends(get_current_user)) -> 
     if stability not in STABILITY_PARAMS:
         raise HTTPException(400, f"Unknown stability '{req.stability}'")
 
-    # Reserved at submit time (not on job start) so a burst of queued jobs
-    # can't overrun a free-tier budget before any of them complete -- see
-    # credits.reserve_credit for the atomicity guarantee under concurrent
-    # requests.
-    if not credits.reserve_credit(user_id):
-        raise HTTPException(402, "No credits remaining for this billing period.")
-
     chunks = chunk_text(text, CHUNK_MAX_CHARS)
     estimated_s = _estimate_seconds(len(text))
     job_id = uuid.uuid4().hex
@@ -1003,18 +970,14 @@ def cancel_queued_job(job_id: str, user_id: str = Depends(get_current_user)):
             _pending_job_ids.remove(job_id)
             job.update(status="canceled", finished_at=time.time())
             _persist_queue_locked()
-            release_now = True
         elif job_id == _current_running_job_id and job["status"] == "running":
             # Not canceled yet -- _process_job's chunk loop notices this and
             # finishes the cancellation (see the "canceling" check there).
             job["status"] = "canceling"
-            release_now = False
         else:
             raise HTTPException(
                 400, "Only a queued or currently-processing job can be canceled.",
             )
-    if release_now:
-        credits.release_reservation(user_id)
     return {"ok": True}
 
 

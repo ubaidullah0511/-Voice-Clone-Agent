@@ -13,7 +13,6 @@ interface Props {
   /** Increment to fire the one-shot pulse ring (keyed remount). */
   pulseEpoch: number
   onClick: () => void
-  noCredits?: boolean
 }
 
 // framer-motion interpolates box-shadows only between literal strings, so
@@ -32,7 +31,6 @@ export default function GenerateButton({
   count,
   pulseEpoch,
   onClick,
-  noCredits,
 }: Props) {
   const reducedMotion = usePrefersReducedMotion()
   const interactive = !disabled && !reducedMotion
@@ -61,7 +59,7 @@ export default function GenerateButton({
       >
         <WandIcon />
         <span>{warming ? 'Warming up the voice model...' : busy ? 'Submitting...' : 'Generate all'}</span>
-        {!busy && !warming && !noCredits && count > 1 && (
+        {!busy && !warming && count > 1 && (
           <span className="mono generate-count">{count}</span>
         )}
       </motion.button>

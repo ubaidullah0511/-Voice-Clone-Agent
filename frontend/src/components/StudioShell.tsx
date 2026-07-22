@@ -17,12 +17,10 @@ import {
   createPreset,
   deleteHistoryEntry,
   deletePreset,
-  getAccount,
   getLanguages,
   listHistory,
   listPresets,
   startGenerate,
-  type Account,
   type HistoryEntry,
   type Preset,
 } from '../api'
@@ -72,7 +70,6 @@ export default function StudioShell() {
   const [submittingAll, setSubmittingAll] = useState(false)
   const [pulseEpoch, setPulseEpoch] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [account, setAccount] = useState<Account | null>(null)
 
   const { queue, refresh: refreshQueue } = useGenerationActivity()
   const generationsRef = useRef<HTMLDivElement>(null)
@@ -89,18 +86,6 @@ export default function StudioShell() {
       .then((r) => setHistory(r.history))
       .catch(() => {})
   }
-
-  function refreshAccount() {
-    getAccount()
-      .then(setAccount)
-      .catch(() => {})
-  }
-
-  useEffect(() => {
-    refreshAccount()
-    const timer = window.setInterval(refreshAccount, 30_000)
-    return () => window.clearInterval(timer)
-  }, [])
 
   // Landing on the Studio page is itself a strong signal of intent to use
   // the app -- and since the whole backend (not just generation) lives on
@@ -143,7 +128,6 @@ export default function StudioShell() {
   useEffect(() => {
     if (doneCount > 0) {
       refreshHistory()
-      refreshAccount()
     }
   }, [doneCount])
 
@@ -262,7 +246,6 @@ export default function StudioShell() {
       setScriptBlocks([newBlock()])
       setPulseEpoch((n) => n + 1)
       refreshQueue()
-      refreshAccount()
       generationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to submit batch')
@@ -271,15 +254,8 @@ export default function StudioShell() {
     }
   }
 
-  const noCreditsRemaining =
-    account !== null && !account.unlimited && account.credits_remaining - account.credits_reserved <= 0
-
   const canGenerateAll =
-    modelStatus === 'ready' &&
-    validBlocks.length > 0 &&
-    !submittingAll &&
-    !warmingUp &&
-    !noCreditsRemaining
+    modelStatus === 'ready' && validBlocks.length > 0 && !submittingAll && !warmingUp
 
   return (
     <>
@@ -413,7 +389,6 @@ export default function StudioShell() {
             count={validBlocks.length}
             pulseEpoch={pulseEpoch}
             onClick={handleGenerateAll}
-            noCredits={noCreditsRemaining}
           />
 
           <div ref={generationsRef} className="generations">

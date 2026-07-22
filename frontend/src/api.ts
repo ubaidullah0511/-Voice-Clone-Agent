@@ -76,17 +76,6 @@ export interface ApiErrorBody {
   detail: string
 }
 
-export interface Account {
-  user_id: string
-  email: string | null
-  plan: string
-  unlimited: boolean
-  credits_remaining: number
-  credits_reserved: number
-  credits_total: number
-  credits_reset_at: number
-}
-
 export class ApiError extends Error {}
 
 // Frontend and backend are separate origins now (Vercel + RunPod pod proxy
@@ -133,10 +122,6 @@ export function getHealth(): Promise<HealthResponse> {
 
 export function getLanguages(): Promise<LanguagesResponse> {
   return fetch(apiUrl('/api/languages')).then(parseOrThrow<LanguagesResponse>)
-}
-
-export function getAccount(): Promise<Account> {
-  return authFetch(apiUrl('/api/account')).then(parseOrThrow<Account>)
 }
 
 export function listPresets(): Promise<{ presets: Preset[] }> {
